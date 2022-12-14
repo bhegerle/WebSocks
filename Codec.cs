@@ -5,31 +5,31 @@ namespace shock;
 
 internal class Codec
 {
-    private const int KEY_LEN = 16;
-    private static readonly int NONCE_LEN = AesCcm.NonceByteSizes.MinSize;
-    private static readonly int TAG_LEN = AesCcm.TagByteSizes.MinSize;
+    private const int KeyLen = 16;
+    private static readonly int NonceLen = AesCcm.NonceByteSizes.MinSize;
+    private static readonly int TagLen = AesCcm.TagByteSizes.MinSize;
 
-    private readonly AesCcm Cipher;
-    private readonly RandomNumberGenerator Rng;
+    private readonly AesCcm _cipher;
+    private readonly RandomNumberGenerator _rng;
 
     internal Codec(string key)
     {
         var ikm = Encoding.UTF8.GetBytes(key);
-        var dkey = HKDF.DeriveKey(HashAlgorithmName.SHA256, ikm, KEY_LEN);
-        Cipher = new AesCcm(dkey);
+        var dkey = HKDF.DeriveKey(HashAlgorithmName.SHA256, ikm, KeyLen);
+        _cipher = new AesCcm(dkey);
 
-        Rng = RandomNumberGenerator.Create();
+        _rng = RandomNumberGenerator.Create();
     }
 
     internal void Encode(byte[] data, Stream stream)
     {
-        var nonce = new byte[NONCE_LEN];
-        Rng.GetBytes(nonce);
+        var nonce = new byte[NonceLen];
+        _rng.GetBytes(nonce);
 
-        var tag = new byte[TAG_LEN];
+        var tag = new byte[TagLen];
 
         var ciphertext = new byte[data.Length];
-        Cipher.Encrypt(nonce, data, ciphertext, tag);
+        _cipher.Encrypt(nonce, data, ciphertext, tag);
 
         stream.Write(nonce);
         stream.Write(tag);
@@ -39,13 +39,13 @@ internal class Codec
 
     internal byte[] Decode(Stream stream)
     {
-        var nonce = Read(stream, NONCE_LEN);
-        var tag = Read(stream, TAG_LEN);
+        var nonce = Read(stream, NonceLen);
+        var tag = Read(stream, TagLen);
         var len = Read(stream, sizeof(int));
         var ciphertext = Read(stream, BitConverter.ToInt32(len));
 
         var plaintext = new byte[ciphertext.Length];
-        Cipher.Decrypt(nonce, ciphertext, tag, plaintext);
+        _cipher.Decrypt(nonce, ciphertext, tag, plaintext);
 
         return plaintext;
     }

@@ -5,14 +5,15 @@ if (args.Length == 0)
 
 var config = await Config.Load(args[0]);
 
-var buffer = new byte[3];
-var stream = new MemoryStream();
-var c = new Codec(config.Key);
-c.Encode(buffer, stream);
+var codec = new Codec(config.Key);
 
-stream.Seek(0, SeekOrigin.Begin);
-
-var p = c.Decode(stream);
-
-
-Console.WriteLine();
+if (config.Mode == Mode.Server)
+{
+    var srv = new Server(config.Address);
+    await srv.Start();
+}
+else
+{
+    var cli = new Client(config.Address);
+    await cli.Start();
+}
