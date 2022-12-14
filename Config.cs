@@ -7,7 +7,7 @@ public record Config
 {
     public Mode Mode { get; init; }
     public string Address { get; init; }
-    public string Secret { get; init; }
+    public string Key { get; init; }
 
     internal static async Task<Config> Load(string path)
     {
