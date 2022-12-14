@@ -1,7 +1,7 @@
-﻿using shock;
+﻿using WebSocks;
 
 if (args.Length == 0)
-    throw new Exception("usage: shock.exe {config path}");
+    throw new Exception("usage: websocks.exe {config path}");
 
 var config = await Config.Load(args[0]);
 

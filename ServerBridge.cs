@@ -1,6 +1,6 @@
 ﻿using System.Net.WebSockets;
 
-namespace shock;
+namespace WebSocks;
 
 internal class ServerBridge
 {

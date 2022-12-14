@@ -1,4 +1,4 @@
-﻿namespace shock;
+﻿namespace WebSocks;
 
 internal class Bridge
 {

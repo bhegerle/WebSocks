@@ -1,7 +1,7 @@
 ﻿using System.Net;
 using System.Text.RegularExpressions;
 
-namespace shock;
+namespace WebSocks;
 
 internal class Server
 {

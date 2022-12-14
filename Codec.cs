@@ -1,7 +1,7 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 
-namespace shock;
+namespace WebSocks;
 
 internal class Codec
 {
