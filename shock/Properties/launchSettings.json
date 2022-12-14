@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "shock": {
+      "commandName": "Project",
+      "commandLineArgs": "config.json"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+﻿{
+  "Mode": "Server",
+  "Address": "http",
+  "Secret":  "foo"
+}
