@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Text.RegularExpressions;
+using websocks;
 
 namespace WebSocks;
 
@@ -42,10 +43,9 @@ internal class Server
                     throw new Exception("web socket expected");
 
                 var webSock = await ctx.AcceptWebSocketAsync(null);
-                
-                var bridge = new ServerBridge(webSock.WebSocket);
 
-                await bridge.Transit();
+                var wsRecv = new WebSocketReceiver(webSock.WebSocket);
+                await wsRecv.Transit();
             } catch (Exception e)
             {
                 res.StatusCode = 500;
