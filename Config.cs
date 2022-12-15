@@ -7,7 +7,6 @@ public record Config
 {
     public string ListenOn { get; init; }
     public string TunnelTo { get; init; }
-    public string Key { get; init; }
     public ProxyConfig Proxy { get; init; } = new() { UseSystemProxy = true };
 
     internal Uri ListenUri => new(ListenOn);
