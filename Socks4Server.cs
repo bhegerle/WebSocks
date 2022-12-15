@@ -17,7 +17,7 @@ internal class Socks4Server
 
     private EndPoint EndPoint => _config.ListenUri.EndPoint();
     private Uri TunnelUri => _config.TunnelUri;
-    private ProxyConfig ProxyConfig => _config.ProxyConfig;
+    private ProxyConfig ProxyConfig => _config.Proxy;
 
     internal async Task Start()
     {
