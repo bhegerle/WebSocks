@@ -1,16 +1,15 @@
 ﻿using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
-using websocks;
 
 namespace WebSocks;
 
-internal class Client
+internal class Socks4Server
 {
     private readonly EndPoint _endPoint;
     private readonly Uri _bridgeUri;
 
-    internal Client(Uri socksUri, Uri bridgeUri)
+    internal Socks4Server(Uri socksUri, Uri bridgeUri)
     {
         socksUri.CheckScheme("listen", "socks4");
         bridgeUri.CheckScheme("bridge", "ws");

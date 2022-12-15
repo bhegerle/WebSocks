@@ -1,6 +1,6 @@
 ﻿using System.Net;
 
-namespace websocks;
+namespace WebSocks;
 
 internal static class Utils
 {

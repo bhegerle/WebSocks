@@ -1,14 +1,13 @@
 ﻿using System.Net;
-using websocks;
 
 namespace WebSocks;
 
-internal class Server
+internal class WebSocketsServer
 {
     private readonly HttpListener _listener;
     private readonly Uri _listenUri;
 
-    internal Server(Uri listenUri)
+    internal WebSocketsServer(Uri listenUri)
     {
         listenUri.CheckScheme("listen", "ws");
 

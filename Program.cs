@@ -10,11 +10,11 @@ var listenUri = new Uri(config.ListenOn);
 
 if (listenUri.Scheme == "socks4")
 {
-    var cli = new Client(listenUri, new Uri(config.TunnelTo));
+    var cli = new Socks4Server(listenUri, new Uri(config.TunnelTo));
     await cli.Start();
 }
 else
 {
-    var srv = new Server(listenUri);
+    var srv = new WebSocketsServer(listenUri);
     await srv.Start();
 }
