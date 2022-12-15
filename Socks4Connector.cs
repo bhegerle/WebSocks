@@ -49,7 +49,10 @@ internal static class Socks4Connector
         buffer[0] = ConnectResponse;
         buffer[1] = ConnectGranted;
 
-        await webSocket.SendAsync(buffer, WebSocketMessageType.Binary, true, token);
+        await webSocket.SendAsync(buffer, 
+            WebSocketMessageType.Binary, 
+            WebSocketMessageFlags.EndOfMessage | WebSocketMessageFlags.DisableCompression, 
+            token);
         Console.WriteLine("connect request granted");
 
         return socket;
