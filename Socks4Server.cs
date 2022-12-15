@@ -34,7 +34,7 @@ internal class Socks4Server
             var cts = new CancellationTokenSource();
 
             var ws = new ClientWebSocket();
-            _config.SystemProxyConfig.Configure(ws, TunnelUri);
+            SystemProxyConfig.Configure(ws, TunnelUri);
 
             await ws.ConnectAsync(TunnelUri, cts.Token);
             Console.WriteLine($"bridging through {TunnelUri}");

@@ -1,62 +1,43 @@
-﻿using System.Net;
-
-namespace WebSocks;
+﻿namespace WebSocks;
 
 internal class WebSocketsServer
 {
-    private readonly Config _config;
-    private readonly HttpListener _listener;
+    private readonly WebApplication _app;
 
     internal WebSocketsServer(Config config)
     {
         config.ListenUri.CheckUri("listen", "ws");
 
-        _config = config;
-        _listener = new HttpListener();
+        var builder = WebApplication.CreateBuilder(Array.Empty<string>());
+        builder.WebHost.ConfigureKestrel(srvOpt => { srvOpt.Listen(config.ListenUri.EndPoint()); });
 
-        var addr = config.ListenUri.Host;
-        var port = config.ListenUri.Port;
-
-        if (addr == "0.0.0.0")
-            addr = "+";
-
-        _listener.Prefixes.Add($"http://{addr}:{port}/");
+        _app = builder.Build();
+        _app.UseWebSockets();
+        _app.Use(Handler);
     }
 
     internal async Task Start()
     {
-        _listener.Start();
+        await _app.RunAsync();
+    }
 
-        Console.WriteLine($"listening on {_config.ListenUri}");
+    private async Task Handler(HttpContext ctx, RequestDelegate next)
+    {
+        Console.WriteLine($"request from {ctx.GetEndpoint()}");
 
-        while (true)
+        if (ctx.WebSockets.IsWebSocketRequest)
         {
-            var ctx = await _listener.GetContextAsync();
-            var req = ctx.Request;
-            var res = ctx.Response;
+            using var webSock = await ctx.WebSockets.AcceptWebSocketAsync();
+            Console.WriteLine("accepted WebSocket");
 
-            var cts = new CancellationTokenSource();
+            var s = await Socks4Connector.Connect(webSock, ctx.RequestAborted);
 
-            try
-            {
-                Console.WriteLine($"request from {req.RemoteEndPoint}");
-
-                if (!req.IsWebSocketRequest)
-                    throw new Exception("web socket expected");
-
-                var webSock = await ctx.AcceptWebSocketAsync(null);
-                Console.WriteLine("accepted WebSocket");
-
-                var s = await Socks4Connector.Connect(webSock.WebSocket, cts.Token);
-
-                var b = new Bridge(s, webSock.WebSocket);
-                await b.Transit(cts.Token);
-            } catch (Exception e)
-            {
-                res.StatusCode = 500;
-                await using var o = new StreamWriter(res.OutputStream);
-                await o.WriteAsync(e.ToString());
-            }
+            var b = new Bridge(s, webSock);
+            await b.Transit(ctx.RequestAborted);
+        }
+        else
+        {
+            ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
         }
     }
 }

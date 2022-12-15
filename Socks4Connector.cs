@@ -23,8 +23,8 @@ internal static class Socks4Connector
 
         var vn = buffer[0];
         var cmd = buffer[1];
-        var port = ToInt16(buffer, 2);
-        var addr = ToInt32(buffer, 4);
+        var port = NetworkToHostOrder(ToInt16(buffer, 2));
+        var addr = new IPAddress(buffer[4..8]);
         var nul = buffer[8];
 
         if (vn != Version)
@@ -36,7 +36,7 @@ internal static class Socks4Connector
         if (nul != 0)
             throw new Exception("expected SOCKS connect message terminal null byte");
 
-        var ep = new IPEndPoint(new IPAddress(addr), NetworkToHostOrder(port));
+        var ep = new IPEndPoint(addr, port);
 
         Console.WriteLine($"received connect request for {ep}");
 
@@ -49,9 +49,9 @@ internal static class Socks4Connector
         buffer[0] = ConnectResponse;
         buffer[1] = ConnectGranted;
 
-        await webSocket.SendAsync(buffer, 
-            WebSocketMessageType.Binary, 
-            WebSocketMessageFlags.EndOfMessage | WebSocketMessageFlags.DisableCompression, 
+        await webSocket.SendAsync(buffer,
+            WebSocketMessageType.Binary,
+            WebSocketMessageFlags.EndOfMessage | WebSocketMessageFlags.DisableCompression,
             token);
         Console.WriteLine("connect request granted");
 
