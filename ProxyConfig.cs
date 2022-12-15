@@ -13,8 +13,12 @@ public record ProxyConfig
         if (UseSystemProxy)
         {
             var proxyUri = WebRequest.GetSystemWebProxy().GetProxy(uri);
-            ws.Options.Proxy = new WebProxy(proxyUri);
-            Console.WriteLine($"connecting to {uri} through WebProxy {proxyUri}");
+
+            if (proxyUri != null)
+            {
+                ws.Options.Proxy = new WebProxy(proxyUri);
+                Console.WriteLine($"connecting to {uri} through WebProxy {proxyUri}");
+            }
         }
         else if (HttpProxy != null)
         {

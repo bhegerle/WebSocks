@@ -4,13 +4,13 @@ using System.Net.WebSockets;
 
 namespace WebStunnel;
 
-internal class Socks4Server
+internal class TcpServer
 {
     private readonly Config _config;
 
-    internal Socks4Server(Config config)
+    internal TcpServer(Config config)
     {
-        config.ListenUri.CheckUri("listen", "socks4");
+        config.ListenUri.CheckUri("listen", "tcp");
         config.TunnelUri.CheckUri("bridge", "ws");
         _config = config;
     }
@@ -24,7 +24,8 @@ internal class Socks4Server
         var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
         socket.Bind(EndPoint);
         socket.Listen();
-        Console.WriteLine($"listening on {EndPoint}");
+
+        Console.WriteLine($"tunneling {_config.ListenUri} -> {TunnelUri}");
 
         while (true)
         {

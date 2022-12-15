@@ -5,11 +5,9 @@ if (args.Length == 0)
 
 var config = await Config.Load(args[0]);
 
-var listenUri = new Uri(config.ListenOn);
-Console.WriteLine(config.Proxy.HttpProxy);
-if (config.ListenUri.Scheme == "socks4")
+if (config.ListenUri.Scheme == "tcp")
 {
-    var cli = new Socks4Server(config);
+    var cli = new TcpServer(config);
     await cli.Start();
 }
 else

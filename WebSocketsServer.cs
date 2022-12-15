@@ -1,12 +1,18 @@
-﻿namespace WebStunnel;
+﻿using System.Net.Sockets;
+
+namespace WebStunnel;
 
 internal class WebSocketsServer
 {
     private readonly WebApplication _app;
+    private readonly Config _config;
 
     internal WebSocketsServer(Config config)
     {
         config.ListenUri.CheckUri("listen", "ws");
+        config.TunnelUri.CheckUri("tunnel", "tcp");
+
+        _config = config;
 
         var builder = WebApplication.CreateBuilder(Array.Empty<string>());
         builder.WebHost.ConfigureKestrel(srvOpt => { srvOpt.Listen(config.ListenUri.EndPoint()); });
@@ -15,6 +21,8 @@ internal class WebSocketsServer
         _app.UseWebSockets();
         _app.Use(Handler);
     }
+
+    private Uri TunnelUri => _config.TunnelUri;
 
     internal async Task Start()
     {
@@ -27,12 +35,13 @@ internal class WebSocketsServer
 
         if (ctx.WebSockets.IsWebSocketRequest)
         {
-            using var webSock = await ctx.WebSockets.AcceptWebSocketAsync();
+            using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
             Console.WriteLine("accepted WebSocket");
 
-            var s = await Socks4Connector.Connect(webSock, ctx.RequestAborted);
+            var s = new Socket(SocketType.Stream, ProtocolType.Tcp);
+            await s.ConnectAsync(TunnelUri.EndPoint(), ctx.RequestAborted);
 
-            var b = new Bridge(s, webSock);
+            var b = new Bridge(s, ws);
             await b.Transit(ctx.RequestAborted);
         }
         else
