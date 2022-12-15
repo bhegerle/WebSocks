@@ -11,8 +11,8 @@ internal class Socks4Server
 
     internal Socks4Server(Uri socksUri, Uri bridgeUri)
     {
-        socksUri.CheckScheme("listen", "socks4");
-        bridgeUri.CheckScheme("bridge", "ws");
+        socksUri.CheckUri("listen", "socks4");
+        bridgeUri.CheckUri("bridge", "ws");
 
         _endPoint = socksUri.EndPoint();
         _bridgeUri = bridgeUri;

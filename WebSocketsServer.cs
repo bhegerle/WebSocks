@@ -9,13 +9,18 @@ internal class WebSocketsServer
 
     internal WebSocketsServer(Uri listenUri)
     {
-        listenUri.CheckScheme("listen", "ws");
+        listenUri.CheckUri("listen", "ws");
 
         _listenUri = listenUri;
         _listener = new HttpListener();
 
-        var httpUri = _listenUri.ChangeScheme("http");
-        _listener.Prefixes.Add(httpUri.ToString());
+        var addr = _listenUri.Host;
+        var port = _listenUri.Port;
+
+        if (addr == "0.0.0.0")
+            addr = "+";
+
+        _listener.Prefixes.Add($"http://{addr}:{port}/");
     }
 
     internal async Task Start()
