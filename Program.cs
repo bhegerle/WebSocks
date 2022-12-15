@@ -1,4 +1,4 @@
-﻿using WebSocks;
+﻿using WebStunnel;
 
 if (args.Length == 0)
     throw new Exception("usage: websocks.exe {config path}");

@@ -1,7 +1,7 @@
 ﻿using System.Net;
 using System.Net.WebSockets;
 
-namespace WebSocks;
+namespace WebStunnel;
 
 public record ProxyConfig
 {

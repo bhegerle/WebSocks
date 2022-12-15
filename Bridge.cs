@@ -1,7 +1,7 @@
 ﻿using System.Net.Sockets;
 using System.Net.WebSockets;
 
-namespace WebSocks;
+namespace WebStunnel;
 
 internal class Bridge
 {

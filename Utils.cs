@@ -1,6 +1,6 @@
 ﻿using System.Net;
 
-namespace WebSocks;
+namespace WebStunnel;
 
 internal static class Utils
 {

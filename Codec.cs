@@ -1,7 +1,7 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 
-namespace WebSocks;
+namespace WebStunnel;
 
 internal class Codec
 {

@@ -1,4 +1,4 @@
-﻿namespace WebSocks;
+﻿namespace WebStunnel;
 
 internal class WebSocketsServer
 {

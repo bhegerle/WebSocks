@@ -4,7 +4,7 @@ using System.Net.WebSockets;
 using static System.BitConverter;
 using static System.Net.IPAddress;
 
-namespace WebSocks;
+namespace WebStunnel;
 
 internal static class Socks4Connector
 {
