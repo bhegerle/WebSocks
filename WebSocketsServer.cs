@@ -4,18 +4,18 @@ namespace WebSocks;
 
 internal class WebSocketsServer
 {
+    private readonly Config _config;
     private readonly HttpListener _listener;
-    private readonly Uri _listenUri;
 
-    internal WebSocketsServer(Uri listenUri)
+    internal WebSocketsServer(Config config)
     {
-        listenUri.CheckUri("listen", "ws");
+        config.ListenUri.CheckUri("listen", "ws");
 
-        _listenUri = listenUri;
+        _config = config;
         _listener = new HttpListener();
 
-        var addr = _listenUri.Host;
-        var port = _listenUri.Port;
+        var addr = config.ListenUri.Host;
+        var port = config.ListenUri.Port;
 
         if (addr == "0.0.0.0")
             addr = "+";
@@ -27,7 +27,7 @@ internal class WebSocketsServer
     {
         _listener.Start();
 
-        Console.WriteLine($"listening on {_listenUri}");
+        Console.WriteLine($"listening on {_config.ListenUri}");
 
         while (true)
         {

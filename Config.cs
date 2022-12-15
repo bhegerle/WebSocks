@@ -10,6 +10,10 @@ public record Config
     public string Key { get; init; }
     public bool UseSystemProxy { get; init; } = true;
 
+    internal Uri ListenUri => new(ListenOn);
+    internal Uri TunnelUri => new(TunnelTo);
+    internal SystemProxyConfig SystemProxyConfig => new(UseSystemProxy);
+
     internal static async Task<Config> Load(string path)
     {
         await using var file = new FileStream(path, FileMode.Open, FileAccess.Read);

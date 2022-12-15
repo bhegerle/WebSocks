@@ -6,26 +6,25 @@ namespace WebSocks;
 
 internal class Socks4Server
 {
-    private readonly Uri _bridgeUri;
-    private readonly EndPoint _endPoint;
-    private readonly SystemProxyConfig _sysProxConf;
+    private readonly Config _config;
 
-    internal Socks4Server(Uri socksUri, Uri bridgeUri, SystemProxyConfig sysProxConf)
+    internal Socks4Server(Config config)
     {
-        socksUri.CheckUri("listen", "socks4");
-        bridgeUri.CheckUri("bridge", "ws");
-
-        _endPoint = socksUri.EndPoint();
-        _bridgeUri = bridgeUri;
-        _sysProxConf = sysProxConf;
+        config.ListenUri.CheckUri("listen", "socks4");
+        config.TunnelUri.CheckUri("bridge", "ws");
+        _config = config;
     }
+
+    private EndPoint EndPoint => _config.ListenUri.EndPoint();
+    private Uri TunnelUri => _config.TunnelUri;
+    private SystemProxyConfig SystemProxyConfig => _config.SystemProxyConfig;
 
     internal async Task Start()
     {
         var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(_endPoint);
+        socket.Bind(EndPoint);
         socket.Listen();
-        Console.WriteLine($"listening on {_endPoint}");
+        Console.WriteLine($"listening on {EndPoint}");
 
         while (true)
         {
@@ -35,10 +34,10 @@ internal class Socks4Server
             var cts = new CancellationTokenSource();
 
             var ws = new ClientWebSocket();
-            _sysProxConf.Configure(ws, _bridgeUri);
+            _config.SystemProxyConfig.Configure(ws, TunnelUri);
 
-            await ws.ConnectAsync(_bridgeUri, cts.Token);
-            Console.WriteLine($"bridging through {_bridgeUri}");
+            await ws.ConnectAsync(TunnelUri, cts.Token);
+            Console.WriteLine($"bridging through {TunnelUri}");
 
             var b = new Bridge(s, ws);
             await b.Transit(cts.Token);
