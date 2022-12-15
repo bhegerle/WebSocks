@@ -5,7 +5,7 @@ namespace WebSocks;
 
 public record ProxyConfig
 {
-    public bool UseSystemProxy { get; init; } = true;
+    public bool UseSystemProxy { get; init; }
     public string HttpProxy { get; init; }
 
     public void Configure(ClientWebSocket ws, Uri uri)

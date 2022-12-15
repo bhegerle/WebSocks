@@ -7,7 +7,7 @@ var config = await Config.Load(args[0]);
 
 var codec = new Codec(config.Key);
 var listenUri = new Uri(config.ListenOn);
-
+Console.WriteLine(config.Proxy.HttpProxy);
 if (config.ListenUri.Scheme == "socks4")
 {
     var cli = new Socks4Server(config);
