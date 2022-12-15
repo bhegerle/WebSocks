@@ -6,14 +6,15 @@ if (args.Length == 0)
 var config = await Config.Load(args[0]);
 
 var codec = new Codec(config.Key);
+var listenUri = new Uri(config.ListenOn);
 
-if (config.Mode == Mode.Server)
+if (listenUri.Scheme == "socks4")
 {
-    var srv = new Server(config.Address);
-    await srv.Start();
+    var cli = new Client(listenUri, new Uri(config.TunnelTo));
+    await cli.Start();
 }
 else
 {
-    var cli = new Client(config.Address);
-    await cli.Start();
+    var srv = new Server(listenUri);
+    await srv.Start();
 }

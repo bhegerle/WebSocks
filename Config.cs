@@ -5,8 +5,8 @@ namespace WebSocks;
 
 public record Config
 {
-    public Mode Mode { get; init; }
-    public string Address { get; init; }
+    public string ListenOn { get; init; }
+    public string TunnelTo { get; init; }
     public string Key { get; init; }
 
     internal static async Task<Config> Load(string path)
@@ -27,10 +27,4 @@ public record Config
 
         return conf;
     }
-}
-
-public enum Mode
-{
-    Server,
-    Client
 }

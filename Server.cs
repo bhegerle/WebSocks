@@ -1,39 +1,35 @@
 ﻿using System.Net;
-using System.Text.RegularExpressions;
 using websocks;
 
 namespace WebSocks;
 
 internal class Server
 {
-    private readonly string _address;
     private readonly HttpListener _listener;
+    private readonly Uri _listenUri;
 
-    internal Server(string address)
+    internal Server(Uri listenUri)
     {
-        _address = address;
+        _listenUri = listenUri;
         _listener = new HttpListener();
 
-        var m = Regex.Match(address, "^ws://(.*)");
-        if (!m.Success)
-            throw new Exception("Only Uris starting with 'ws://' are supported");
-
-        var httpAddress = "http://" + m.Groups[1].Value;
-        _listener.Prefixes.Add(httpAddress);
+        var httpUri = _listenUri.ChangeScheme("http");
+        _listener.Prefixes.Add(httpUri.ToString());
     }
 
     internal async Task Start()
     {
         _listener.Start();
 
-        Console.WriteLine($"listening on {_address}");
+        Console.WriteLine($"listening on {_listenUri}");
 
         while (true)
         {
             var ctx = await _listener.GetContextAsync();
-
             var req = ctx.Request;
             var res = ctx.Response;
+
+            var cts = new CancellationTokenSource();
 
             try
             {
@@ -43,9 +39,12 @@ internal class Server
                     throw new Exception("web socket expected");
 
                 var webSock = await ctx.AcceptWebSocketAsync(null);
+                Console.WriteLine("accepted WebSocket");
 
-                var wsRecv = new WebSocketReceiver(webSock.WebSocket);
-                await wsRecv.Transit();
+                var s = await Socks4Connector.Connect(webSock.WebSocket, cts.Token);
+
+                var b = new Bridge(s, webSock.WebSocket);
+                await b.Transit(cts.Token);
             } catch (Exception e)
             {
                 res.StatusCode = 500;

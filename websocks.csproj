@@ -7,11 +7,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="config.json" />
+    <None Remove="socks4.json" />
+    <None Remove="ws.json" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="config.json">
+    <Content Include="socks4.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="ws.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

@@ -1,31 +1,44 @@
-﻿using System.Net.WebSockets;
+﻿using System.Net;
+using System.Net.Sockets;
+using System.Net.WebSockets;
+using websocks;
 
 namespace WebSocks;
 
 internal class Client
 {
-    private readonly Uri _address;
-    readonly CancellationTokenSource _cts;
+    private readonly EndPoint _endPoint;
+    private readonly Uri _bridgeUri;
 
-    internal Client(string address)
+    internal Client(Uri socksUri, Uri bridgeUri)
     {
-        _address = new Uri(address);
-        _cts= new CancellationTokenSource();
+        socksUri.CheckScheme("listen", "socks4");
+        bridgeUri.CheckScheme("listen", "ws");
+
+        _endPoint = socksUri.EndPoint();
+        _bridgeUri = bridgeUri;
     }
 
     internal async Task Start()
     {
-        var client=new ClientWebSocket();
+        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+        socket.Bind(_endPoint);
+        socket.Listen();
+        Console.WriteLine($"listening on {_endPoint}");
 
-        await client.ConnectAsync(_address, _cts.Token);
+        while (true)
+        {
+            var s = await socket.AcceptAsync();
+            Console.WriteLine($"connection from {s.RemoteEndPoint}");
 
-        Console.WriteLine($"connected to {_address}");
+            var cts = new CancellationTokenSource();
 
-        var buffer = new byte[] { 1, 2, 3, 4 };
-         await client.SendAsync(buffer, WebSocketMessageType.Binary, true, _cts.Token);
+            var ws = new ClientWebSocket();
+            await ws.ConnectAsync(_bridgeUri, cts.Token);
+            Console.WriteLine($"bridging through {_bridgeUri}");
 
-         Console.WriteLine($"sent");
-
-        Thread.Sleep(10000);
+            var b = new Bridge(s, ws);
+            await b.Transit(cts.Token);
+        }
     }
 }
