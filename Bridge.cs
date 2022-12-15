@@ -45,7 +45,10 @@ internal class Bridge
 
                 seg = seg[..r];
 
-                await _ws.SendAsync(seg, WebSocketMessageType.Binary, true, token);
+                await _ws.SendAsync(seg,
+                    WebSocketMessageType.Binary,
+                    WebSocketMessageFlags.EndOfMessage | WebSocketMessageFlags.DisableCompression,
+                    token);
 
                 Console.WriteLine($"sock->ws: {seg.Count} bytes");
             }

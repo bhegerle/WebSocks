@@ -6,16 +6,18 @@ namespace WebSocks;
 
 internal class Socks4Server
 {
-    private readonly EndPoint _endPoint;
     private readonly Uri _bridgeUri;
+    private readonly EndPoint _endPoint;
+    private readonly SystemProxyConfig _sysProxConf;
 
-    internal Socks4Server(Uri socksUri, Uri bridgeUri)
+    internal Socks4Server(Uri socksUri, Uri bridgeUri, SystemProxyConfig sysProxConf)
     {
         socksUri.CheckUri("listen", "socks4");
         bridgeUri.CheckUri("bridge", "ws");
 
         _endPoint = socksUri.EndPoint();
         _bridgeUri = bridgeUri;
+        _sysProxConf = sysProxConf;
     }
 
     internal async Task Start()
@@ -33,6 +35,8 @@ internal class Socks4Server
             var cts = new CancellationTokenSource();
 
             var ws = new ClientWebSocket();
+            _sysProxConf.Configure(ws, _bridgeUri);
+
             await ws.ConnectAsync(_bridgeUri, cts.Token);
             Console.WriteLine($"bridging through {_bridgeUri}");
 

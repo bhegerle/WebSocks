@@ -8,6 +8,7 @@ public record Config
     public string ListenOn { get; init; }
     public string TunnelTo { get; init; }
     public string Key { get; init; }
+    public bool UseSystemProxy { get; init; } = true;
 
     internal static async Task<Config> Load(string path)
     {
