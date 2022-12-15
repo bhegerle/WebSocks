@@ -10,6 +10,8 @@ internal class Server
 
     internal Server(Uri listenUri)
     {
+        listenUri.CheckScheme("listen", "ws");
+
         _listenUri = listenUri;
         _listener = new HttpListener();
 

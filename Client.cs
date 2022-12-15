@@ -13,7 +13,7 @@ internal class Client
     internal Client(Uri socksUri, Uri bridgeUri)
     {
         socksUri.CheckScheme("listen", "socks4");
-        bridgeUri.CheckScheme("listen", "ws");
+        bridgeUri.CheckScheme("bridge", "ws");
 
         _endPoint = socksUri.EndPoint();
         _bridgeUri = bridgeUri;

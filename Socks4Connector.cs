@@ -8,6 +8,11 @@ namespace WebSocks;
 
 internal static class Socks4Connector
 {
+    private const int Version = 4;
+    private const int ConnectRequest = 1;
+    private const int ConnectResponse = 0;
+    private const int ConnectGranted = 90;
+
     internal static async Task<Socket> Connect(WebSocket webSocket, CancellationToken token)
     {
         var buffer = new byte[9];
@@ -18,28 +23,34 @@ internal static class Socks4Connector
 
         var vn = buffer[0];
         var cmd = buffer[1];
-        var port = NetworkToHostOrder(ToInt16(buffer, 2));
-        var addr = NetworkToHostOrder(ToInt32(buffer, 4));
+        var port = ToInt16(buffer, 2);
+        var addr = ToInt32(buffer, 4);
         var nul = buffer[8];
 
-        if (vn != 4)
+        if (vn != Version)
             throw new Exception("unsupported SOCKS version number");
 
-        if (cmd != 1)
+        if (cmd != ConnectRequest)
             throw new Exception("expected SOCKS connect message");
 
         if (nul != 0)
             throw new Exception("expected SOCKS connect message terminal null byte");
 
-        var ep = new IPEndPoint(new IPAddress(addr), port);
+        var ep = new IPEndPoint(new IPAddress(addr), NetworkToHostOrder(port));
+
+        Console.WriteLine($"received connect request for {ep}");
 
         var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
         await socket.ConnectAsync(ep, token);
 
+        Console.WriteLine($"connected to {ep}");
+
         buffer = buffer[..8];
-        buffer[1] = 90;
+        buffer[0] = ConnectResponse;
+        buffer[1] = ConnectGranted;
 
         await webSocket.SendAsync(buffer, WebSocketMessageType.Binary, true, token);
+        Console.WriteLine("connect request granted");
 
         return socket;
     }
