@@ -8,11 +8,10 @@ public record Config
     public string ListenOn { get; init; }
     public string TunnelTo { get; init; }
     public string Key { get; init; }
-    public bool UseSystemProxy { get; init; } = true;
+    public ProxyConfig ProxyConfig { get; init; } = new ProxyConfig();
 
     internal Uri ListenUri => new(ListenOn);
     internal Uri TunnelUri => new(TunnelTo);
-    internal SystemProxyConfig SystemProxyConfig => new(UseSystemProxy);
 
     internal static async Task<Config> Load(string path)
     {

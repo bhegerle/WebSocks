@@ -2,7 +2,7 @@
   "profiles": {
     "WebSocks": {
       "commandName": "Project",
-      "commandLineArgs": "ws.json"
+      "commandLineArgs": ".dev1.json"
     }
   }
 }

@@ -17,7 +17,7 @@ internal class Socks4Server
 
     private EndPoint EndPoint => _config.ListenUri.EndPoint();
     private Uri TunnelUri => _config.TunnelUri;
-    private SystemProxyConfig SystemProxyConfig => _config.SystemProxyConfig;
+    private ProxyConfig ProxyConfig => _config.ProxyConfig;
 
     internal async Task Start()
     {
@@ -34,7 +34,7 @@ internal class Socks4Server
             var cts = new CancellationTokenSource();
 
             var ws = new ClientWebSocket();
-            SystemProxyConfig.Configure(ws, TunnelUri);
+            ProxyConfig.Configure(ws, TunnelUri);
 
             await ws.ConnectAsync(TunnelUri, cts.Token);
             Console.WriteLine($"bridging through {TunnelUri}");
