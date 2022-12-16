@@ -40,7 +40,7 @@ internal class TcpServer
             await ws.ConnectAsync(TunnelUri, cts.Token);
             Console.WriteLine($"bridging through {TunnelUri}");
 
-            var b = new Bridge(s, ws);
+            var b = new Bridge(s, ws, _config);
             await b.Transit(cts.Token);
         }
     }

@@ -41,7 +41,7 @@ internal class WebSocketsServer
             var s = new Socket(SocketType.Stream, ProtocolType.Tcp);
             await s.ConnectAsync(TunnelUri.EndPoint(), ctx.RequestAborted);
 
-            var b = new Bridge(s, ws);
+            var b = new Bridge(s, ws, _config);
             await b.Transit(ctx.RequestAborted);
         }
         else

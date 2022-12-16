@@ -22,10 +22,13 @@ internal static class Utils
         return new IPEndPoint(addr, uri.Port);
     }
 
-    internal static Uri ChangeScheme(this Uri uri, string newScheme)
+    internal static ArraySegment<byte> AsSegment(this byte[] x)
     {
-        var s = uri.ToString();
-        s = newScheme + s[s.IndexOf(':')..];
-        return new Uri(s);
+        return new ArraySegment<byte>(x);
+    }
+
+    internal static ArraySegment<byte> AsSegment(this byte[] x, int offset, int count)
+    {
+        return new ArraySegment<byte>(x, offset, count);
     }
 }

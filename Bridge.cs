@@ -5,14 +5,16 @@ namespace WebStunnel;
 
 internal class Bridge
 {
+    private readonly Codec _codec;
     private readonly Socket _sock;
     private readonly byte[] _sockRecvBuffer, _wsRecvBuffer;
     private readonly WebSocket _ws;
 
-    internal Bridge(Socket sock, WebSocket ws)
+    internal Bridge(Socket sock, WebSocket ws, Config config)
     {
         _sock = sock;
         _ws = ws;
+        _codec = new Codec(config);
 
         _sockRecvBuffer = new byte[1024 * 1024];
         _wsRecvBuffer = new byte[1024 * (1024 + 1)];
@@ -37,13 +39,13 @@ internal class Bridge
         {
             while (_sock.Connected)
             {
-                var seg = new ArraySegment<byte>(_sockRecvBuffer);
+                var seg = Codec.GetAuthSegment(_sockRecvBuffer);
                 var r = await _sock.ReceiveAsync(seg, SocketFlags.None, token);
 
                 if (r == 0)
                     break;
 
-                seg = seg[..r];
+                seg = _codec.AuthMessage(seg[..r]);
 
                 await _ws.SendAsync(seg,
                     WebSocketMessageType.Binary,
@@ -64,7 +66,7 @@ internal class Bridge
         {
             while (_ws.State == WebSocketState.Open)
             {
-                var seg = new ArraySegment<byte>(_wsRecvBuffer);
+                var seg = _wsRecvBuffer.AsSegment();
 
                 while (seg.Count > 0)
                 {
@@ -74,13 +76,16 @@ internal class Bridge
                     if (recv.EndOfMessage)
                         break;
 
-                    Console.WriteLine($"ws partial: bufferd {recv.Count} bytes");
+                    Console.WriteLine($"ws partial: buffered {recv.Count} bytes");
                 }
+
+                if (seg.Offset == 0)
+                    break;
 
                 if (seg.Count <= 0)
                     throw new Exception("message exceeds segment");
 
-                seg = new ArraySegment<byte>(_wsRecvBuffer, 0, seg.Offset);
+                seg = _codec.VerifyMessage(_wsRecvBuffer.AsSegment(0, seg.Offset));
 
                 await _sock.SendAsync(seg, SocketFlags.None);
 
