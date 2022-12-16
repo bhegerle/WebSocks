@@ -68,6 +68,8 @@ internal static class Utils
     {
         path = Path.GetFullPath(path);
 
+        Console.WriteLine($"loggin to {path}");
+
         var dir = Path.GetDirectoryName(path);
         if (dir != null)
             Directory.CreateDirectory(dir);
