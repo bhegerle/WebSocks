@@ -1,4 +1,6 @@
 ﻿using System.Net;
+using System.Net.Sockets;
+using System.Net.WebSockets;
 
 namespace WebStunnel;
 
@@ -37,5 +39,28 @@ internal static class Utils
         var cts = new CancellationTokenSource();
         cts.CancelAfter(TimeSpan.FromMilliseconds(longTimout ? 2000 : 100));
         return cts.Token;
+    }
+
+    internal static void ForceClose(this Socket s)
+    {
+        try
+        {
+            if (s.Connected) s.Close(100);
+        } catch
+        {
+            // ignored
+        }
+    }
+
+    internal static async Task ForceCloseAsync(this WebSocket ws)
+    {
+        try
+        {
+            if (ws.State != WebSocketState.Closed)
+                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, TimeoutToken(false));
+        } catch
+        {
+            // ignored
+        }
     }
 }

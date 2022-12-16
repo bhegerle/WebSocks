@@ -117,21 +117,7 @@ internal class Bridge
 
     private async Task Close()
     {
-        try
-        {
-            if (_sock.Connected) _sock.Close(100);
-        } catch
-        {
-            // ignored
-        }
-
-        try
-        {
-            if (_ws.State != WebSocketState.Closed)
-                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, Utils.TimeoutToken(false));
-        } catch
-        {
-            // ignored
-        }
+        _sock.ForceClose();
+        await _ws.ForceCloseAsync();
     }
 }

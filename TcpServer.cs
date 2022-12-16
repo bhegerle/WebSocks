@@ -35,8 +35,16 @@ internal class TcpServer
             var ws = new ClientWebSocket();
             ProxyConfig.Configure(ws, TunnelUri);
 
-            await ws.ConnectAsync(TunnelUri, Utils.TimeoutToken());
-            Console.WriteLine($"bridging through {TunnelUri}");
+            try
+            {
+                await ws.ConnectAsync(TunnelUri, Utils.TimeoutToken());
+                Console.WriteLine($"bridging through {TunnelUri}");
+            } catch (Exception e)
+            {
+                Console.WriteLine($"could not connect to {TunnelUri}: {e.Message}");
+                s.ForceClose();
+                continue;
+            }
 
             var b = new Bridge(s, ws, _config);
             await b.Transit();
