@@ -9,6 +9,7 @@ public record Config
     public string TunnelTo { get; init; }
     public ProxyConfig Proxy { get; init; } = new() { UseSystemProxy = true };
     public string Key { get; init; }
+    public string LogPath { get; init; }
 
     internal Uri ListenUri => new(ListenOn);
     internal Uri TunnelUri => new(TunnelTo);

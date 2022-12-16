@@ -63,4 +63,15 @@ internal static class Utils
             // ignored
         }
     }
+
+    public static void SetLogPath(string path)
+    {
+        path = Path.GetFullPath(path);
+
+        var dir = Path.GetDirectoryName(path);
+        if (dir != null)
+            Directory.CreateDirectory(dir);
+
+        Console.SetOut(new StreamWriter(path));
+    }
 }

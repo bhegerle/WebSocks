@@ -4,6 +4,8 @@ if (args.Length == 0)
     throw new Exception("usage: websocks.exe {config path}");
 
 var config = await Config.Load(args[0]);
+if (config.LogPath != null)
+    Utils.SetLogPath(config.LogPath);
 
 if (config.ListenUri.Scheme == "tcp")
 {
