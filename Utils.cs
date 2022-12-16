@@ -68,12 +68,13 @@ internal static class Utils
     {
         path = Path.GetFullPath(path);
 
-        Console.WriteLine($"loggin to {path}");
+        Console.WriteLine($"logging to {path}");
 
         var dir = Path.GetDirectoryName(path);
         if (dir != null)
             Directory.CreateDirectory(dir);
 
-        Console.SetOut(new StreamWriter(path));
+        var w = new StreamWriter(path) { AutoFlush = true };
+        Console.SetOut(w);
     }
 }
