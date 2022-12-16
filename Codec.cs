@@ -21,7 +21,6 @@ internal class Codec
 
     internal static ArraySegment<byte> GetAuthSegment(byte[] buffer)
     {
-        Array.Fill(buffer, default);
         return buffer.AsSegment()[HashSize..];
     }
 
@@ -47,6 +46,8 @@ internal class Codec
 
         var eq = true;
         for (var i = 0; i < HashSize; i++) eq = eq && hashSeg[i] == _check[i];
+
+        Array.Fill(_check, default);
 
         if (!eq)
             throw new Exception("message could not be verified");

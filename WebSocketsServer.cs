@@ -15,6 +15,7 @@ internal class WebSocketsServer
         _config = config;
 
         var builder = WebApplication.CreateBuilder(Array.Empty<string>());
+        builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(srvOpt => { srvOpt.Listen(config.ListenUri.EndPoint()); });
 
         _app = builder.Build();
@@ -26,6 +27,7 @@ internal class WebSocketsServer
 
     internal async Task Start()
     {
+        Console.WriteLine($"tunneling {_config.ListenUri} -> {TunnelUri}");
         await _app.RunAsync();
     }
 
@@ -39,13 +41,14 @@ internal class WebSocketsServer
             Console.WriteLine("accepted WebSocket");
 
             var s = new Socket(SocketType.Stream, ProtocolType.Tcp);
-            await s.ConnectAsync(TunnelUri.EndPoint(), ctx.RequestAborted);
+            await s.ConnectAsync(TunnelUri.EndPoint(), Utils.TimeoutToken());
 
             var b = new Bridge(s, ws, _config);
-            await b.Transit(ctx.RequestAborted);
+            await b.Transit();
         }
         else
         {
+            Console.WriteLine("not WebSocket");
             ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
         }
     }

@@ -32,16 +32,14 @@ internal class TcpServer
             var s = await socket.AcceptAsync();
             Console.WriteLine($"connection from {s.RemoteEndPoint}");
 
-            var cts = new CancellationTokenSource();
-
             var ws = new ClientWebSocket();
             ProxyConfig.Configure(ws, TunnelUri);
 
-            await ws.ConnectAsync(TunnelUri, cts.Token);
+            await ws.ConnectAsync(TunnelUri, Utils.TimeoutToken());
             Console.WriteLine($"bridging through {TunnelUri}");
 
             var b = new Bridge(s, ws, _config);
-            await b.Transit(cts.Token);
+            await b.Transit();
         }
     }
 }

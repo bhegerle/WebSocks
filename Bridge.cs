@@ -20,17 +20,20 @@ internal class Bridge
         _wsRecvBuffer = new byte[1024 * (1024 + 1)];
     }
 
-    internal async Task Transit(CancellationToken token)
+    internal async Task Transit()
     {
-        var s = SocketToWs(token);
-        var ws = WsToSocket(token);
+        var cts = new CancellationTokenSource();
+        
+        var s = SocketToWs(cts.Token);
+        var ws = WsToSocket(cts.Token);
 
         await Task.WhenAny(s, ws);
 
-        await Close(token);
+        cts.Cancel();
 
-        await s;
-        await ws;
+        await Task.WhenAll(s, ws);
+
+        await Close();
     }
 
     private async Task SocketToWs(CancellationToken token)
@@ -39,13 +42,15 @@ internal class Bridge
         {
             while (_sock.Connected)
             {
+                Array.Fill(_sockRecvBuffer, default);
                 var seg = Codec.GetAuthSegment(_sockRecvBuffer);
-                var r = await _sock.ReceiveAsync(seg, SocketFlags.None, token);
 
+                var r = await _sock.ReceiveAsync(seg, SocketFlags.None, token);
                 if (r == 0)
                     break;
 
-                seg = _codec.AuthMessage(seg[..r]);
+                seg = seg[..r];
+                seg = _codec.AuthMessage(seg);
 
                 await _ws.SendAsync(seg,
                     WebSocketMessageType.Binary,
@@ -54,6 +59,10 @@ internal class Bridge
 
                 Console.WriteLine($"sock->ws: {seg.Count} bytes");
             }
+
+            Console.WriteLine("finished socket receives");
+        } catch (OperationCanceledException)
+        {
         } catch (Exception e)
         {
             Console.WriteLine($"sock->ws: exception {e.Message}");
@@ -66,12 +75,15 @@ internal class Bridge
         {
             while (_ws.State == WebSocketState.Open)
             {
+                Array.Fill(_wsRecvBuffer, default);
                 var seg = _wsRecvBuffer.AsSegment();
 
                 while (seg.Count > 0)
                 {
                     var recv = await _ws.ReceiveAsync(seg, token);
                     seg = seg[recv.Count..];
+
+                    Console.WriteLine($"got {recv.MessageType} {recv.CloseStatus}");
 
                     if (recv.EndOfMessage)
                         break;
@@ -91,18 +103,25 @@ internal class Bridge
 
                 Console.WriteLine($"ws->sock: {seg.Count} bytes");
             }
+
+            Console.WriteLine("finished WebSocket receives");
+        } catch (OperationCanceledException)
+        {
         } catch (Exception e)
         {
             Console.WriteLine($"ws->sock: exception {e.Message}");
         }
     }
 
-    private async Task Close(CancellationToken token)
+    private async Task Close()
     {
         try
         {
             if (_sock.Connected)
-                _sock.Close();
+            {
+                Console.WriteLine("closing socket");
+                _sock.Close(100);
+            }
         } catch
         {
             // ignored
@@ -111,7 +130,10 @@ internal class Bridge
         try
         {
             if (_ws.State != WebSocketState.Closed)
-                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, token);
+            {
+                Console.WriteLine("closing WebSocket");
+                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, Utils.TimeoutToken());
+            }
         } catch
         {
             // ignored

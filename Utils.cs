@@ -31,4 +31,11 @@ internal static class Utils
     {
         return new ArraySegment<byte>(x, offset, count);
     }
+
+    internal static CancellationToken TimeoutToken(bool longTimout = true)
+    {
+        var cts = new CancellationTokenSource();
+        cts.CancelAfter(TimeSpan.FromMilliseconds(longTimout ? 2000 : 100));
+        return cts.Token;
+    }
 }
