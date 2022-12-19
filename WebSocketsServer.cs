@@ -43,8 +43,8 @@ internal class WebSocketsServer
             var s = new Socket(SocketType.Stream, ProtocolType.Tcp);
             await s.ConnectAsync(TunnelUri.EndPoint(), Utils.TimeoutToken());
 
-            var b = new Bridge(s, ws, _config);
-            await b.Transit(Initiator.Remote);
+            var b = new Bridge(s, ws, ProtocolByte.WsListener, _config);
+            await b.Transit();
         }
         else
         {

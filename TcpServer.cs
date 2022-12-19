@@ -46,8 +46,8 @@ internal class TcpServer
                 continue;
             }
 
-            var b = new Bridge(s, ws, _config);
-            await b.Transit(Initiator.Local);
+            var b = new Bridge(s, ws, ProtocolByte.TcpListener, _config);
+            await b.Transit();
         }
     }
 }

@@ -10,19 +10,19 @@ internal class Bridge
     private readonly byte[] _sockRecvBuffer, _wsRecvBuffer;
     private readonly WebSocket _ws;
 
-    internal Bridge(Socket sock, WebSocket ws, Config config)
+    internal Bridge(Socket sock, WebSocket ws, ProtocolByte protoByte, Config config)
     {
         _sock = sock;
         _ws = ws;
-        _codec = new Codec(config);
+        _codec = new Codec(protoByte, config);
 
         _sockRecvBuffer = new byte[1024 * 1024];
         _wsRecvBuffer = new byte[1024 * (1024 + 1)];
     }
 
-    internal async Task Transit(Initiator init)
+    internal async Task Transit()
     {
-        await Handshake(init);
+        await Handshake();
 
         var cts = new CancellationTokenSource();
 
@@ -39,8 +39,20 @@ internal class Bridge
         await ws;
     }
 
-    private async Task Handshake(Initiator init)
+    private async Task Handshake()
     {
+        var token = Utils.TimeoutToken();
+
+        var init = _sockRecvBuffer.AsSegment(0, Codec.InitMessageSize);
+        init = _codec.InitHandshake(init);
+
+        await WsSend(init, token);
+
+        var (remInit, handle) = await WsRecv(token);
+        if (!handle)
+            throw new Exception("did not receive handshake");
+
+        _codec.VerifyHandshake(remInit);
     }
 
     private async Task SocketToWs(CancellationToken token)

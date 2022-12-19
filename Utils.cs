@@ -41,6 +41,11 @@ internal static class Utils
         return new ArraySegment<byte>(x, offset, count);
     }
 
+    internal static void Swap(ArraySegment<byte> a, ArraySegment<byte> b, int n)
+    {
+        for (var i = 0; i < n; i++) (a[i], b[i]) = (b[i], a[i]);
+    }
+
     internal static CancellationToken TimeoutToken(bool longTimout = true)
     {
         var cts = new CancellationTokenSource();
