@@ -14,18 +14,16 @@ internal class Codec
             throw new Exception("key required");
 
         _key = Encoding.UTF8.GetBytes(config.Key);
-        _key = SHA512.Create().ComputeHash(_key);
+
+        using var sha = SHA512.Create();
+        _key = sha.ComputeHash(_key);
 
         _check = new byte[HashSize];
     }
 
-    internal static ArraySegment<byte> GetAuthSegment(byte[] buffer)
-    {
-        return buffer.AsSegment()[HashSize..];
-    }
-
     internal ArraySegment<byte> AuthMessage(ArraySegment<byte> seg)
     {
+        return seg;
         if (seg.Array == null || seg.Offset != HashSize)
             throw new Exception("invalid segment");
 
@@ -39,13 +37,13 @@ internal class Codec
 
     internal ArraySegment<byte> VerifyMessage(ArraySegment<byte> seg)
     {
+        return seg;
         var hashSeg = seg[.. HashSize];
         var msgSeg = seg[HashSize..];
 
         HMACSHA512.HashData(_key, msgSeg, _check);
 
-        var eq = true;
-        for (var i = 0; i < HashSize; i++) eq = eq && hashSeg[i] == _check[i];
+        var eq = Utils.ConjEqual(hashSeg, _check);
 
         Array.Fill(_check, default);
 

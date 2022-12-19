@@ -20,8 +20,10 @@ internal class Bridge
         _wsRecvBuffer = new byte[1024 * (1024 + 1)];
     }
 
-    internal async Task Transit()
+    internal async Task Transit(Initiator init)
     {
+        await Handshake(init);
+
         var cts = new CancellationTokenSource();
 
         var s = SocketToWs(cts.Token);
@@ -37,26 +39,23 @@ internal class Bridge
         await ws;
     }
 
+    private async Task Handshake(Initiator init)
+    {
+    }
+
     private async Task SocketToWs(CancellationToken token)
     {
         try
         {
             while (_sock.Connected)
             {
-                Array.Fill(_sockRecvBuffer, default);
-                var seg = Codec.GetAuthSegment(_sockRecvBuffer);
-
-                var r = await _sock.ReceiveAsync(seg, SocketFlags.None, token);
-                if (r == 0)
+                var (seg, handle) = await SockRecv(token);
+                if (!handle)
                     break;
 
-                seg = seg[..r];
                 seg = _codec.AuthMessage(seg);
 
-                await _ws.SendAsync(seg,
-                    WebSocketMessageType.Binary,
-                    WebSocketMessageFlags.EndOfMessage | WebSocketMessageFlags.DisableCompression,
-                    token);
+                await WsSend(seg, token);
 
                 Console.WriteLine($"sock->ws: {seg.Count} bytes");
             }
@@ -74,38 +73,15 @@ internal class Bridge
         {
             while (_ws.State == WebSocketState.Open)
             {
-                Array.Fill(_wsRecvBuffer, default);
-                var seg = _wsRecvBuffer.AsSegment();
+                var (seg, handle) = await WsRecv(token);
+                if (!handle)
+                    continue;
 
-                var msgCompl = false;
-                while (seg.Count > 0)
-                {
-                    var recv = await _ws.ReceiveAsync(seg, token);
-                    if (recv.MessageType == WebSocketMessageType.Close)
-                        break;
+                seg = _codec.VerifyMessage(seg);
 
-                    seg = seg[recv.Count..];
+                await SockSend(seg, token);
 
-                    if (recv.EndOfMessage)
-                    {
-                        msgCompl = true;
-                        break;
-                    }
-
-                    Console.WriteLine($"ws partial: buffered {recv.Count} bytes");
-                }
-
-                if (seg.Count <= 0)
-                    throw new Exception("message exceeds segment");
-
-                if (msgCompl)
-                {
-                    seg = _codec.VerifyMessage(_wsRecvBuffer.AsSegment(0, seg.Offset));
-
-                    await _sock.SendAsync(seg, SocketFlags.None);
-
-                    Console.WriteLine($"ws->sock: {seg.Count} bytes");
-                }
+                Console.WriteLine($"ws->sock: {seg.Count} bytes");
             }
 
             Console.WriteLine("finished receiving on WebSocket");
@@ -113,6 +89,57 @@ internal class Bridge
         {
             Console.WriteLine($"ws->sock: exception {e.Message}");
         }
+    }
+
+    private async Task<(ArraySegment<byte> seg, bool handle)> SockRecv(CancellationToken token)
+    {
+        Array.Fill(_sockRecvBuffer, default);
+        var seg = _sockRecvBuffer.AsSegment();
+
+        var r = await _sock.ReceiveAsync(seg, SocketFlags.None, token);
+
+        seg = seg[..r];
+        var handle = r > 0;
+
+        return (seg, handle);
+    }
+
+    private async Task SockSend(ArraySegment<byte> seg, CancellationToken token)
+    {
+        await _sock.SendAsync(seg, SocketFlags.None, token);
+    }
+
+    private async Task<(ArraySegment<byte> seg, bool handle)> WsRecv(CancellationToken token)
+    {
+        Array.Fill(_wsRecvBuffer, default);
+        var seg = _wsRecvBuffer.AsSegment();
+
+        while (seg.Count > 0)
+        {
+            var recv = await _ws.ReceiveAsync(seg, token);
+            if (recv.MessageType != WebSocketMessageType.Binary)
+                return (seg, false);
+
+            seg = seg[recv.Count..];
+
+            if (recv.EndOfMessage)
+            {
+                seg = seg.Array.AsSegment(0, seg.Offset);
+                return (seg, true);
+            }
+
+            Console.WriteLine($"ws partial: buffered {recv.Count} bytes");
+        }
+
+        throw new Exception("message exceeds segment");
+    }
+
+    private async Task WsSend(ArraySegment<byte> seg, CancellationToken token)
+    {
+        await _ws.SendAsync(seg,
+            WebSocketMessageType.Binary,
+            WebSocketMessageFlags.EndOfMessage | WebSocketMessageFlags.DisableCompression,
+            token);
     }
 
     private async Task Close()

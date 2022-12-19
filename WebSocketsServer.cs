@@ -44,7 +44,7 @@ internal class WebSocketsServer
             await s.ConnectAsync(TunnelUri.EndPoint(), Utils.TimeoutToken());
 
             var b = new Bridge(s, ws, _config);
-            await b.Transit();
+            await b.Transit(Initiator.Remote);
         }
         else
         {

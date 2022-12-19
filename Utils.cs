@@ -18,6 +18,13 @@ internal static class Utils
             throw new Exception($"expected no user info in {what} uri");
     }
 
+    internal static bool ConjEqual(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
+    {
+        var eq = true;
+        for (var i = 0; i < a.Length && i<b.Length; i++) eq = eq && a[i] == b[i];
+        return eq;
+    }
+
     internal static IPEndPoint EndPoint(this Uri uri)
     {
         var addr = uri.Host == "+" ? IPAddress.Any : IPAddress.Parse(uri.Host);
