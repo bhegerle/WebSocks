@@ -21,7 +21,7 @@ internal static class Utils
     internal static bool ConjEqual(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
     {
         var eq = true;
-        for (var i = 0; i < a.Length && i<b.Length; i++) eq = eq && a[i] == b[i];
+        for (var i = 0; i < a.Length && i < b.Length; i++) eq = eq && a[i] == b[i];
         return eq;
     }
 

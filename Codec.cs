@@ -6,7 +6,7 @@ namespace WebStunnel;
 internal class Codec
 {
     private const int HashSize = 512 / 8;
-    private readonly byte[] _key, _check;
+    private readonly byte[] _key, _check, _auth, _verify;
 
     internal Codec(Config config)
     {
@@ -19,37 +19,64 @@ internal class Codec
         _key = sha.ComputeHash(_key);
 
         _check = new byte[HashSize];
+        _auth = new byte[HashSize];
+        _verify = new byte[HashSize];
     }
 
     internal ArraySegment<byte> AuthMessage(ArraySegment<byte> seg)
     {
-        return seg;
-        if (seg.Array == null || seg.Offset != HashSize)
-            throw new Exception("invalid segment");
+        var msg = new Frame(seg, true);
+        _auth.AsSpan().CopyTo(msg.Suffix);
 
-        var combSeg = seg.Array.AsSegment(0, seg.Count + HashSize);
-        var hashSeg = combSeg[.. HashSize];
+        HMACSHA512.HashData(_key, msg.HmacInput, _auth);
+        _auth.AsSpan().CopyTo(msg.Hmac);
 
-        HMACSHA512.HashData(_key, seg, hashSeg);
+        Dump("auth", msg);
 
-        return combSeg;
+        return msg.Complete;
     }
 
     internal ArraySegment<byte> VerifyMessage(ArraySegment<byte> seg)
     {
-        return seg;
-        var hashSeg = seg[.. HashSize];
-        var msgSeg = seg[HashSize..];
+        var msg = new Frame(seg, false);
 
-        HMACSHA512.HashData(_key, msgSeg, _check);
+        Dump("verify", msg);
 
-        var eq = Utils.ConjEqual(hashSeg, _check);
+        if (!Utils.ConjEqual(msg.Suffix, _verify))
+            throw new Exception("unexpected suffix");
+        
+        HMACSHA512.HashData(_key, msg.HmacInput, _verify);
 
-        Array.Fill(_check, default);
+        if(!Utils.ConjEqual(msg.Hmac, _verify))
+            throw new Exception("invalid HMAC");
 
-        if (!eq)
-            throw new Exception("message could not be verified");
+        return msg.Message;
+    }
 
-        return msgSeg;
+    private void Dump(string auth, Frame msg)
+    {
+        Console.Write($"{auth}\t");
+        foreach (var x in msg.Complete)
+            Console.Write($"{x:x2}");
+        Console.WriteLine();
+    }
+
+    private struct Frame
+    {
+        private const int H2 = 2 * HashSize;
+
+        internal Frame(ArraySegment<byte> x, bool extend)
+        {
+            if (extend)
+                x = x.Array.AsSegment(x.Offset, x.Count + H2);
+
+            Complete = x;
+        }
+
+        internal readonly ArraySegment<byte> Complete;
+        internal ArraySegment<byte> Message => Complete[..^H2];
+        internal ArraySegment<byte> Suffix => Complete[^H2..^HashSize];
+        internal ArraySegment<byte> HmacInput => Complete[..^HashSize];
+        internal ArraySegment<byte> Hmac => Complete[^HashSize..];
     }
 }
