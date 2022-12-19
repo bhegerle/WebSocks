@@ -8,9 +8,11 @@ Authorization is through a shared-secret via HMAC.
 
 Here is a diagram:
 
+```
          +--------------+                   +-------------+
   TCP -> | TCP listener | --- WebSocket --> | WS Listener | --- TCP ---> #.#.#.#:##
          +--------------+                   +-------------+ 
+```
 
 ## Requirements
 
