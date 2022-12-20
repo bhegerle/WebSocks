@@ -27,50 +27,46 @@ internal class TcpServer
 
         Console.WriteLine($"tunneling {_config.ListenUri} -> {TunnelUri}");
 
-        await Test();
+        await Probe.WsHost(TunnelUri, ProxyConfig);
 
-        while (true)
+        var tasks = new List<Task>();
+
+        while (socket.Connected)
         {
             var s = await socket.AcceptAsync();
-            Console.WriteLine($"connection from {s.RemoteEndPoint}");
 
-            var ws = new ClientWebSocket();
-            ProxyConfig.Configure(ws, TunnelUri);
+            tasks.Add(HandleConnection(s));
+
+            var i = await Task.WhenAny(tasks);
 
             try
             {
-                await ws.ConnectAsync(TunnelUri, Utils.TimeoutToken());
-                Console.WriteLine($"bridging through {TunnelUri}");
-            } catch (Exception e)
+                await i;
+            } catch (Exception ex)
             {
-                Console.WriteLine($"could not connect to {TunnelUri}: {e.Message}");
-                s.ForceClose();
-                continue;
+                Console.WriteLine(ex.ToString());
             }
-
-            var b = new Bridge(s, ws, ProtocolByte.TcpListener, _config);
-            await b.Transit();
         }
     }
 
-    private async Task Test()
+    private async Task HandleConnection(Socket s)
     {
-        var testUri = new UriBuilder
+        try
         {
-            Scheme = "http",
-            Host = TunnelUri.Host,
-            Port = TunnelUri.Port
-        }.Uri;
+            Console.WriteLine($"connection from {s.RemoteEndPoint}");
 
-        Console.WriteLine($"testing connection to {testUri}");
+            using var ws = new ClientWebSocket();
+            ProxyConfig.Configure(ws, TunnelUri);
 
-        var hch = new HttpClientHandler();
-        ProxyConfig.Configure(hch, testUri);
+            await ws.ConnectAsync(TunnelUri, Utils.TimeoutToken());
+            Console.WriteLine($"bridging through {TunnelUri}");
 
-        using var client = new HttpClient(hch);
-
-        var res = await client.GetAsync(testUri);
-
-        res.EnsureSuccessStatusCode();
+            var b = new Bridge(s, ws, ProtocolByte.TcpListener, _config);
+            await b.Transit();
+        } finally
+        {
+            Console.WriteLine("done handling connection");
+            s.Dispose();
+        }
     }
 }
