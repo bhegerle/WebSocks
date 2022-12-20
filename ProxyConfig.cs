@@ -10,36 +10,39 @@ public record ProxyConfig
 
     internal void Configure(ClientWebSocket ws, Uri uri)
     {
-        var proxyUri = TryGetProxyUri(uri);
+        var proxy = TryGetProxy(uri);
 
-        if (proxyUri != null)
-            ws.Options.Proxy = new WebProxy(proxyUri);
+        if (proxy != null)
+            ws.Options.Proxy = proxy;
     }
 
     internal void Configure(HttpClientHandler clientHandler, Uri uri)
     {
-        var proxyUri = TryGetProxyUri(uri);
+        var proxy = TryGetProxy(uri);
 
-        if (proxyUri != null)
-            clientHandler.Proxy = new WebProxy(proxyUri);
+        if (proxy != null)
+            clientHandler.Proxy = proxy;
     }
 
-    private Uri TryGetProxyUri(Uri uri)
+    private WebProxy TryGetProxy(Uri uri)
     {
-        Uri proxyUri = null;
-
         if (UseSystemProxy)
         {
-            proxyUri = WebRequest.GetSystemWebProxy().GetProxy(uri);
+            var proxyUri = WebRequest.GetSystemWebProxy().GetProxy(uri);
 
-            if (proxyUri != null) Console.WriteLine($"connecting to {uri} through WebProxy {proxyUri}");
+            if (proxyUri != null)
+            {
+                Console.WriteLine($"connecting to {uri} through WebProxy {proxyUri}");
+                return new WebProxy(proxyUri) { UseDefaultCredentials = true };
+            }
         }
         else if (HttpProxy != null)
         {
-            proxyUri = new Uri(HttpProxy);
+            var proxyUri = new Uri(HttpProxy);
             Console.WriteLine($"connecting through WebProxy {proxyUri}");
+            return new WebProxy(proxyUri);
         }
 
-        return proxyUri;
+        return null;
     }
 }

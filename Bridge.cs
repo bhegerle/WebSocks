@@ -68,8 +68,6 @@ internal class Bridge
                 seg = _codec.AuthMessage(seg);
 
                 await WsSend(seg, token);
-
-                Console.WriteLine($"sock->ws: {seg.Count} bytes");
             }
 
             Console.WriteLine("finished receiving on socket");
@@ -92,8 +90,6 @@ internal class Bridge
                 seg = _codec.VerifyMessage(seg);
 
                 await SockSend(seg, token);
-
-                Console.WriteLine($"ws->sock: {seg.Count} bytes");
             }
 
             Console.WriteLine("finished receiving on WebSocket");

@@ -70,5 +70,7 @@ internal class TcpServer
         using var client = new HttpClient(hch);
 
         var res = await client.GetAsync(testUri);
+
+        res.EnsureSuccessStatusCode();
     }
 }
