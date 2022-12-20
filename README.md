@@ -14,6 +14,10 @@ Here is a diagram:
          +--------------+                   +-------------+ 
 ```
 
+This allows many possiblities, including: ssh to a local port, which will send plain
+HTTP traffic thrugh intermediate networks to a bastion host that will restore
+the TCP channel.
+
 ## Requirements
 
 Requires ASP.NET core 6.
