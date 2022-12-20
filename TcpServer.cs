@@ -27,6 +27,8 @@ internal class TcpServer
 
         Console.WriteLine($"tunneling {_config.ListenUri} -> {TunnelUri}");
 
+        await Test();
+
         while (true)
         {
             var s = await socket.AcceptAsync();
@@ -49,5 +51,24 @@ internal class TcpServer
             var b = new Bridge(s, ws, ProtocolByte.TcpListener, _config);
             await b.Transit();
         }
+    }
+
+    private async Task Test()
+    {
+        var testUri = new UriBuilder
+        {
+            Scheme = "http",
+            Host = TunnelUri.Host,
+            Port = TunnelUri.Port
+        }.Uri;
+
+        Console.WriteLine($"testing connection to {testUri}");
+
+        var hch = new HttpClientHandler();
+        ProxyConfig.Configure(hch, testUri);
+
+        using var client = new HttpClient(hch);
+
+        var res = await client.GetAsync(testUri);
     }
 }

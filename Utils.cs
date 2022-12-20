@@ -10,8 +10,8 @@ internal static class Utils
     {
         if (uri.Scheme != scheme)
             throw new Exception($"expected {scheme}:// {what} uri");
-        if (uri.PathAndQuery != "/")
-            throw new Exception($"expected no path and/or query in {what} uri");
+        if (!string.IsNullOrEmpty(uri.Query))
+            throw new Exception($"expected no query in {what} uri");
         if (!string.IsNullOrEmpty(uri.Fragment))
             throw new Exception($"expected no fragment in {what} uri");
         if (!string.IsNullOrEmpty(uri.UserInfo))
@@ -39,11 +39,6 @@ internal static class Utils
     internal static ArraySegment<byte> AsSegment(this byte[] x, int offset, int count)
     {
         return new ArraySegment<byte>(x, offset, count);
-    }
-
-    internal static void Swap(ArraySegment<byte> a, ArraySegment<byte> b, int n)
-    {
-        for (var i = 0; i < n; i++) (a[i], b[i]) = (b[i], a[i]);
     }
 
     internal static CancellationToken TimeoutToken(bool longTimout = true)
