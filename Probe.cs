@@ -1,11 +1,8 @@
 ﻿namespace WebStunnel;
 
-internal static class Probe
-{
-    internal static async Task WsHost(Uri uri, ProxyConfig proxyConfig)
-    {
-        var testUri = new UriBuilder
-        {
+internal static class Probe {
+    internal static async Task WsHost(Uri uri, ProxyConfig proxyConfig) {
+        var testUri = new UriBuilder {
             Scheme = "http",
             Host = uri.Host,
             Port = uri.Port

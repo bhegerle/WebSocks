@@ -4,10 +4,8 @@ using System.Net.WebSockets;
 
 namespace WebStunnel;
 
-internal static class Utils
-{
-    internal static void CheckUri(this Uri uri, string what, string scheme)
-    {
+internal static class Utils {
+    internal static void CheckUri(this Uri uri, string what, string scheme) {
         if (uri.Scheme != scheme)
             throw new Exception($"expected {scheme}:// {what} uri");
         if (!string.IsNullOrEmpty(uri.Query))
@@ -18,61 +16,49 @@ internal static class Utils
             throw new Exception($"expected no user info in {what} uri");
     }
 
-    internal static bool ConjEqual(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
-    {
+    internal static bool ConjEqual(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b) {
         var eq = true;
         for (var i = 0; i < a.Length && i < b.Length; i++) eq = eq && a[i] == b[i];
         return eq;
     }
 
-    internal static IPEndPoint EndPoint(this Uri uri)
-    {
+    internal static IPEndPoint EndPoint(this Uri uri) {
         var addr = uri.Host == "+" ? IPAddress.Any : IPAddress.Parse(uri.Host);
         return new IPEndPoint(addr, uri.Port);
     }
 
-    internal static ArraySegment<byte> AsSegment(this byte[] x)
-    {
+    internal static ArraySegment<byte> AsSegment(this byte[] x) {
         return new ArraySegment<byte>(x);
     }
 
-    internal static ArraySegment<byte> AsSegment(this byte[] x, int offset, int count)
-    {
+    internal static ArraySegment<byte> AsSegment(this byte[] x, int offset, int count) {
         return new ArraySegment<byte>(x, offset, count);
     }
 
-    internal static CancellationToken TimeoutToken(bool longTimout = true)
-    {
+    internal static CancellationToken TimeoutToken(bool longTimout = true) {
         var cts = new CancellationTokenSource();
         cts.CancelAfter(TimeSpan.FromMilliseconds(longTimout ? 2000 : 100));
         return cts.Token;
     }
 
-    internal static void ForceClose(this Socket s)
-    {
-        try
-        {
+    internal static void ForceClose(this Socket s) {
+        try {
             if (s.Connected) s.Close(100);
-        } catch
-        {
+        } catch {
             // ignored
         }
     }
 
-    internal static async Task ForceCloseAsync(this WebSocket ws)
-    {
-        try
-        {
+    internal static async Task ForceCloseAsync(this WebSocket ws) {
+        try {
             if (ws.State != WebSocketState.Closed)
                 await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, TimeoutToken(false));
-        } catch
-        {
+        } catch {
             // ignored
         }
     }
 
-    public static void SetLogPath(string path)
-    {
+    public static void SetLogPath(string path) {
         path = Path.GetFullPath(path);
 
         Console.WriteLine($"logging to {path}");

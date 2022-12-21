@@ -4,14 +4,12 @@ using System.Net.WebSockets;
 
 namespace WebStunnel;
 
-internal class TcpServer
-{
+internal class TcpServer {
     private readonly Config _config;
     private readonly List<Task> _newTasks;
     private readonly SemaphoreSlim _sem;
 
-    internal TcpServer(Config config)
-    {
+    internal TcpServer(Config config) {
         config.ListenUri.CheckUri("listen", "tcp");
         config.TunnelUri.CheckUri("bridge", "ws");
         _config = config;
@@ -24,8 +22,7 @@ internal class TcpServer
     private Uri TunnelUri => _config.TunnelUri;
     private ProxyConfig ProxyConfig => _config.Proxy;
 
-    internal async Task Start()
-    {
+    internal async Task Start() {
         var listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
         listener.Bind(EndPoint);
         listener.Listen();
@@ -37,8 +34,7 @@ internal class TcpServer
         await AddTask(Accept(listener));
 
         var activeTasks = new List<Task>();
-        while (true)
-        {
+        while (true) {
             activeTasks.AddRange(await GetTasks());
             if (activeTasks.Count == 0)
                 break;
@@ -51,25 +47,20 @@ internal class TcpServer
         listener.Dispose();
     }
 
-    private async Task Accept(Socket listener)
-    {
-        try
-        {
+    private async Task Accept(Socket listener) {
+        try {
             var s = await listener.AcceptAsync();
             await AddTask(Handle(s));
 
             if (!listener.SafeHandle.IsClosed)
                 await AddTask(Accept(listener));
-        } catch (Exception e)
-        {
+        } catch (Exception e) {
             Console.WriteLine($"exception in listen loop: {e}");
         }
     }
 
-    private async Task Handle(Socket s)
-    {
-        try
-        {
+    private async Task Handle(Socket s) {
+        try {
             Console.WriteLine($"connection from {s.RemoteEndPoint}");
 
             using var ws = new ClientWebSocket();
@@ -80,38 +71,30 @@ internal class TcpServer
 
             var b = new Bridge(s, ws, ProtocolByte.TcpListener, _config);
             await b.Transit();
-        } catch (Exception e)
-        {
+        } catch (Exception e) {
             Console.WriteLine($"exception in handling loop: {e}");
-        } finally
-        {
+        } finally {
             Console.WriteLine("done handling connection");
             s.Dispose();
         }
     }
 
-    private async Task AddTask(Task t)
-    {
+    private async Task AddTask(Task t) {
         await _sem.WaitAsync();
-        try
-        {
+        try {
             _newTasks.Add(t);
-        } finally
-        {
+        } finally {
             _sem.Release();
         }
     }
 
-    private async Task<Task[]> GetTasks()
-    {
+    private async Task<Task[]> GetTasks() {
         await _sem.WaitAsync();
-        try
-        {
+        try {
             var a = _newTasks.ToArray();
             _newTasks.Clear();
             return a;
-        } finally
-        {
+        } finally {
             _sem.Release();
         }
     }

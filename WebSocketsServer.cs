@@ -2,13 +2,11 @@
 
 namespace WebStunnel;
 
-internal class WebSocketsServer
-{
+internal class WebSocketsServer {
     private readonly WebApplication _app;
     private readonly Config _config;
 
-    internal WebSocketsServer(Config config)
-    {
+    internal WebSocketsServer(Config config) {
         config.ListenUri.CheckUri("listen", "ws");
         config.TunnelUri.CheckUri("tunnel", "tcp");
 
@@ -25,18 +23,15 @@ internal class WebSocketsServer
 
     private Uri TunnelUri => _config.TunnelUri;
 
-    internal async Task Start()
-    {
+    internal async Task Start() {
         Console.WriteLine($"tunneling {_config.ListenUri} -> {TunnelUri}");
         await _app.RunAsync();
     }
 
-    private async Task Handler(HttpContext ctx, RequestDelegate next)
-    {
+    private async Task Handler(HttpContext ctx, RequestDelegate next) {
         Console.WriteLine($"request from {ctx.GetEndpoint()}");
 
-        if (ctx.WebSockets.IsWebSocketRequest)
-        {
+        if (ctx.WebSockets.IsWebSocketRequest) {
             using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
             Console.WriteLine("accepted WebSocket");
 
@@ -45,9 +40,7 @@ internal class WebSocketsServer
 
             var b = new Bridge(s, ws, ProtocolByte.WsListener, _config);
             await b.Transit();
-        }
-        else
-        {
+        } else {
             Console.WriteLine("not WebSocket");
             ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
         }

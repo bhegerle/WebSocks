@@ -4,16 +4,14 @@ using static System.Security.Cryptography.HMACSHA512;
 
 namespace WebStunnel;
 
-internal class Codec
-{
+internal class Codec {
     private const int HashSize = 512 / 8;
     private readonly ArraySegment<byte> _key, _auth, _verify, _tmp;
     private readonly byte _protoByte;
 
     private State _state;
 
-    internal Codec(ProtocolByte protoByte, Config config)
-    {
+    internal Codec(ProtocolByte protoByte, Config config) {
         if (string.IsNullOrEmpty(config.Key))
             throw new Exception("key required");
 
@@ -28,10 +26,8 @@ internal class Codec
 
     internal static int InitMessageSize => HashSize;
 
-    internal ArraySegment<byte> InitHandshake(ArraySegment<byte> seg)
-    {
-        try
-        {
+    internal ArraySegment<byte> InitHandshake(ArraySegment<byte> seg) {
+        try {
             Transition(State.Init, State.Handshake);
 
             if (seg.Count != InitMessageSize)
@@ -41,30 +37,24 @@ internal class Codec
             rng.GetBytes(seg);
 
             return seg;
-        } catch
-        {
+        } catch {
             SetError();
             throw;
         }
     }
 
-    internal ArraySegment<byte> AuthMessage(ArraySegment<byte> seg)
-    {
-        try
-        {
+    internal ArraySegment<byte> AuthMessage(ArraySegment<byte> seg) {
+        try {
             CheckState(State.Active);
             return AuthMsg(seg);
-        } catch
-        {
+        } catch {
             SetError();
             throw;
         }
     }
 
-    internal void VerifyHandshake(ArraySegment<byte> seg)
-    {
-        try
-        {
+    internal void VerifyHandshake(ArraySegment<byte> seg) {
+        try {
             Transition(State.Handshake, State.Active);
 
             if (seg.Count != InitMessageSize)
@@ -75,28 +65,23 @@ internal class Codec
 
             HashData(_key, acat, _auth);
             HashData(_key, vcat, _verify);
-        } catch
-        {
+        } catch {
             SetError();
             throw;
         }
     }
 
-    internal ArraySegment<byte> VerifyMessage(ArraySegment<byte> seg)
-    {
-        try
-        {
+    internal ArraySegment<byte> VerifyMessage(ArraySegment<byte> seg) {
+        try {
             CheckState(State.Active);
             return VerifyMsg(seg);
-        } catch
-        {
+        } catch {
             SetError();
             throw;
         }
     }
 
-    private ArraySegment<byte> AuthMsg(ArraySegment<byte> seg)
-    {
+    private ArraySegment<byte> AuthMsg(ArraySegment<byte> seg) {
         var msg = new Frame(seg, true);
 
         _auth.CopyTo(msg.Hmac);
@@ -107,8 +92,7 @@ internal class Codec
         return msg.Complete;
     }
 
-    private ArraySegment<byte> VerifyMsg(ArraySegment<byte> seg)
-    {
+    private ArraySegment<byte> VerifyMsg(ArraySegment<byte> seg) {
         var msg = new Frame(seg, false);
 
         msg.Hmac.CopyTo(_tmp);
@@ -121,25 +105,21 @@ internal class Codec
         return msg.Message;
     }
 
-    private void CheckState(State expected)
-    {
+    private void CheckState(State expected) {
         if (_state != expected)
             throw new Exception("invalid codec state");
     }
 
-    private void Transition(State expected, State next)
-    {
+    private void Transition(State expected, State next) {
         CheckState(expected);
         _state = next;
     }
 
-    private void SetError()
-    {
+    private void SetError() {
         _state = State.Error;
     }
 
-    private static byte[] Cat(byte b, ArraySegment<byte> seg0, ArraySegment<byte> seg1)
-    {
+    private static byte[] Cat(byte b, ArraySegment<byte> seg0, ArraySegment<byte> seg1) {
         var cat = new byte[1 + seg0.Count + seg1.Count];
         cat[0] = b;
         seg0.CopyTo(cat, 1);
@@ -147,18 +127,15 @@ internal class Codec
         return cat;
     }
 
-    private enum State
-    {
+    private enum State {
         Init,
         Handshake,
         Active,
         Error
     }
 
-    private readonly struct Frame
-    {
-        internal Frame(ArraySegment<byte> x, bool extend)
-        {
+    private readonly struct Frame {
+        internal Frame(ArraySegment<byte> x, bool extend) {
             if (extend)
                 x = x.Array.AsSegment(x.Offset, x.Count + HashSize);
 
