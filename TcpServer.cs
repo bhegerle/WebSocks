@@ -7,12 +7,17 @@ namespace WebStunnel;
 internal class TcpServer
 {
     private readonly Config _config;
+    private readonly List<Task> _newTasks;
+    private readonly SemaphoreSlim _sem;
 
     internal TcpServer(Config config)
     {
         config.ListenUri.CheckUri("listen", "tcp");
         config.TunnelUri.CheckUri("bridge", "ws");
         _config = config;
+
+        _newTasks = new List<Task>();
+        _sem = new SemaphoreSlim(1);
     }
 
     private EndPoint EndPoint => _config.ListenUri.EndPoint();
@@ -21,35 +26,47 @@ internal class TcpServer
 
     internal async Task Start()
     {
-        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(EndPoint);
-        socket.Listen();
-
-        Console.WriteLine($"tunneling {_config.ListenUri} -> {TunnelUri}");
+        var listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
+        listener.Bind(EndPoint);
+        listener.Listen();
 
         await Probe.WsHost(TunnelUri, ProxyConfig);
 
-        var tasks = new List<Task>();
+        Console.WriteLine($"tunneling {_config.ListenUri} -> {TunnelUri}");
 
-        while (socket.Connected)
+        await AddTask(Accept(listener));
+
+        var activeTasks = new List<Task>();
+        while (true)
         {
-            var s = await socket.AcceptAsync();
+            activeTasks.AddRange(await GetTasks());
+            if (activeTasks.Count == 0)
+                break;
 
-            tasks.Add(HandleConnection(s));
+            var doneTask = await Task.WhenAny(activeTasks);
+            await doneTask;
+            activeTasks.Remove(doneTask);
+        }
 
-            var i = await Task.WhenAny(tasks);
+        listener.Dispose();
+    }
 
-            try
-            {
-                await i;
-            } catch (Exception ex)
-            {
-                Console.WriteLine(ex.ToString());
-            }
+    private async Task Accept(Socket listener)
+    {
+        try
+        {
+            var s = await listener.AcceptAsync();
+            await AddTask(Handle(s));
+
+            if (!listener.SafeHandle.IsClosed)
+                await AddTask(Accept(listener));
+        } catch (Exception e)
+        {
+            Console.WriteLine($"exception in listen loop: {e}");
         }
     }
 
-    private async Task HandleConnection(Socket s)
+    private async Task Handle(Socket s)
     {
         try
         {
@@ -63,10 +80,39 @@ internal class TcpServer
 
             var b = new Bridge(s, ws, ProtocolByte.TcpListener, _config);
             await b.Transit();
+        } catch (Exception e)
+        {
+            Console.WriteLine($"exception in handling loop: {e}");
         } finally
         {
             Console.WriteLine("done handling connection");
             s.Dispose();
+        }
+    }
+
+    private async Task AddTask(Task t)
+    {
+        await _sem.WaitAsync();
+        try
+        {
+            _newTasks.Add(t);
+        } finally
+        {
+            _sem.Release();
+        }
+    }
+
+    private async Task<Task[]> GetTasks()
+    {
+        await _sem.WaitAsync();
+        try
+        {
+            var a = _newTasks.ToArray();
+            _newTasks.Clear();
+            return a;
+        } finally
+        {
+            _sem.Release();
         }
     }
 }
