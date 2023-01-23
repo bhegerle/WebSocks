@@ -3,29 +3,29 @@
 namespace WebStunnel;
 
 internal class WebSocketsServer {
-    private readonly WebApplication _app;
-    private readonly Config _config;
+    private readonly WebApplication app;
+    private readonly Config config;
 
     internal WebSocketsServer(Config config) {
         config.ListenUri.CheckUri("listen", "ws");
         config.TunnelUri.CheckUri("tunnel", "tcp");
 
-        _config = config;
+        this.config = config;
 
         var builder = WebApplication.CreateBuilder(Array.Empty<string>());
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(srvOpt => { srvOpt.Listen(config.ListenUri.EndPoint()); });
 
-        _app = builder.Build();
-        _app.UseWebSockets();
-        _app.Use(Handler);
+        app = builder.Build();
+        app.UseWebSockets();
+        app.Use(Handler);
     }
 
-    private Uri TunnelUri => _config.TunnelUri;
+    private Uri TunnelUri => config.TunnelUri;
 
     internal async Task Start() {
-        Console.WriteLine($"tunneling {_config.ListenUri} -> {TunnelUri}");
-        await _app.RunAsync();
+        Console.WriteLine($"tunneling {config.ListenUri} -> {TunnelUri}");
+        await app.RunAsync();
     }
 
     private async Task Handler(HttpContext ctx, RequestDelegate next) {
@@ -36,7 +36,7 @@ internal class WebSocketsServer {
             Console.WriteLine("accepted WebSocket");
 
             var wsSrc = new SingletonWebSocketSource(ws);
-            var b = new Tunnel(ProtocolByte.WsListener, _config, wsSrc);
+            var b = new Tunnel(ProtocolByte.WsListener, config, wsSrc);
 
             await b.Receive(new byte[1000000], Utils.IdleTimeout());
         } else {

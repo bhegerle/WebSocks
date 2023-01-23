@@ -5,31 +5,31 @@ using System.Net.WebSockets;
 namespace WebStunnel;
 
 internal class TcpServer {
-    private readonly Config _config;
-    private readonly List<Task> _newTasks;
-    private readonly SemaphoreSlim _sem;
-    private readonly ArraySegment<byte> _wsRecvBuffer;
+    private readonly Config config;
+    private readonly List<Task> newTasks;
+    private readonly SemaphoreSlim sem;
+    private readonly ArraySegment<byte> wsRecvBuffer;
 
     internal TcpServer(Config config) {
         config.ListenUri.CheckUri("listen", "tcp");
         config.TunnelUri.CheckUri("bridge", "ws");
-        _config = config;
+        this.config = config;
 
-        _newTasks = new List<Task>();
-        _sem = new SemaphoreSlim(1);
+        newTasks = new List<Task>();
+        sem = new SemaphoreSlim(1);
 
-        _wsRecvBuffer = new byte[1024 * 1024];
+        wsRecvBuffer = new byte[1024 * 1024];
     }
 
-    private EndPoint EndPoint => _config.ListenUri.EndPoint();
-    private Uri TunnelUri => _config.TunnelUri;
-    private ProxyConfig ProxyConfig => _config.Proxy;
+    private EndPoint EndPoint => config.ListenUri.EndPoint();
+    private Uri TunnelUri => config.TunnelUri;
+    private ProxyConfig ProxyConfig => config.Proxy;
 
     internal async Task Start() {
         var autoWsSrc = new AutoconnectWebSocketSource(TunnelUri, ProxyConfig);
-        var tunnel = new Tunnel(ProtocolByte.TcpListener, _config, autoWsSrc);
+        var tunnel = new Tunnel(ProtocolByte.TcpListener, config, autoWsSrc);
 
-        var x = await tunnel.Receive(_wsRecvBuffer, Utils.IdleTimeout());
+        var x = await tunnel.Receive(wsRecvBuffer, Utils.IdleTimeout());
 
         return;
 
@@ -42,7 +42,7 @@ internal class TcpServer {
 
         await Probe.WsHost(TunnelUri, ProxyConfig);
 
-        Console.WriteLine($"tunneling {_config.ListenUri} -> {TunnelUri}");
+        Console.WriteLine($"tunneling {config.ListenUri} -> {TunnelUri}");
 
         await AddTask(Accept(listener));
 
@@ -82,7 +82,7 @@ internal class TcpServer {
             await ws.ConnectAsync(TunnelUri, Utils.TimeoutToken());
             Console.WriteLine($"bridging through {TunnelUri}");
 
-            var b = new Bridge(s, ws, ProtocolByte.TcpListener, _config);
+            var b = new Bridge(s, ws, ProtocolByte.TcpListener, config);
             await b.Transit();
         } catch (Exception e) {
             Console.WriteLine($"exception in handling loop: {e}");
@@ -93,22 +93,22 @@ internal class TcpServer {
     }
 
     private async Task AddTask(Task t) {
-        await _sem.WaitAsync();
+        await sem.WaitAsync();
         try {
-            _newTasks.Add(t);
+            newTasks.Add(t);
         } finally {
-            _sem.Release();
+            sem.Release();
         }
     }
 
     private async Task<Task[]> GetTasks() {
-        await _sem.WaitAsync();
+        await sem.WaitAsync();
         try {
-            var a = _newTasks.ToArray();
-            _newTasks.Clear();
+            var a = newTasks.ToArray();
+            newTasks.Clear();
             return a;
         } finally {
-            _sem.Release();
+            sem.Release();
         }
     }
 }

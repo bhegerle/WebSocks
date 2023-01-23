@@ -13,20 +13,20 @@ internal enum CodecState {
 
 internal class Codec {
     private const int HashSize = 512 / 8;
-    private readonly ArraySegment<byte> _key, _auth, _verify, _tmp;
-    private readonly byte _protoByte;
+    private readonly ArraySegment<byte> key, auth, verify, tmp;
+    private readonly byte protoByte;
 
     internal Codec(ProtocolByte protoByte, Config config) {
         if (string.IsNullOrEmpty(config.Key))
             throw new Exception("key required");
 
-        _protoByte = (byte)protoByte;
+        this.protoByte = (byte)protoByte;
 
-        _key = SHA512.HashData(Encoding.UTF8.GetBytes(config.Key));
+        key = SHA512.HashData(Encoding.UTF8.GetBytes(config.Key));
 
-        _auth = new byte[HashSize];
-        _verify = new byte[HashSize];
-        _tmp = new byte[HashSize];
+        auth = new byte[HashSize];
+        verify = new byte[HashSize];
+        tmp = new byte[HashSize];
 
         State = CodecState.Init;
     }
@@ -57,11 +57,11 @@ internal class Codec {
             if (seg.Count != InitMessageSize)
                 throw new Exception("wrong size for init handshake message");
 
-            var acat = Cat(_protoByte, _auth, _verify);
-            var vcat = Cat((byte)~_protoByte, _verify, _auth);
+            var acat = Cat(protoByte, auth, verify);
+            var vcat = Cat((byte)~protoByte, verify, auth);
 
-            HashData(_key, acat, _auth);
-            HashData(_key, vcat, _verify);
+            HashData(key, acat, auth);
+            HashData(key, vcat, verify);
         } catch {
             SetError();
             throw;
@@ -91,10 +91,10 @@ internal class Codec {
     private ArraySegment<byte> AuthMsg(ArraySegment<byte> seg) {
         var msg = new Frame(seg, true);
 
-        _auth.CopyTo(msg.Hmac);
-        HashData(_key, msg.Complete, _auth);
+        auth.CopyTo(msg.Hmac);
+        HashData(key, msg.Complete, auth);
 
-        _auth.CopyTo(msg.Hmac);
+        auth.CopyTo(msg.Hmac);
 
         return msg.Complete;
     }
@@ -102,11 +102,11 @@ internal class Codec {
     private ArraySegment<byte> VerifyMsg(ArraySegment<byte> seg) {
         var msg = new Frame(seg, false);
 
-        msg.Hmac.CopyTo(_tmp);
-        _verify.CopyTo(msg.Hmac);
-        HashData(_key, msg.Complete, _verify);
+        msg.Hmac.CopyTo(tmp);
+        verify.CopyTo(msg.Hmac);
+        HashData(key, msg.Complete, verify);
 
-        if (!Utils.ConjEqual(_verify, _tmp))
+        if (!Utils.ConjEqual(verify, tmp))
             throw new Exception("invalid HMAC");
 
         return msg.Message;

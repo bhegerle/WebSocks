@@ -7,31 +7,31 @@ public interface IWebSocketSource : IDisposable {
 }
 
 internal class SingletonWebSocketSource : IWebSocketSource {
-    private WebSocket _ws;
+    private WebSocket ws;
 
     internal SingletonWebSocketSource(WebSocket ws) {
-        _ws = ws;
+        this.ws = ws;
     }
 
     public void Dispose() {
-        using (_ws)
+        using (ws)
             return;
     }
 
     public Task<WebSocket> GetWebSocket(CancellationToken token) {
-        var t = Task.FromResult(_ws);
-        _ws = null;
+        var t = Task.FromResult(ws);
+        ws = null;
         return t;
     }
 }
 
 internal class AutoconnectWebSocketSource : IWebSocketSource {
-    private readonly Uri _tunnelUri;
-    private readonly ProxyConfig _proxyConfig;
+    private readonly Uri tunnelUri;
+    private readonly ProxyConfig proxyConfig;
 
     internal AutoconnectWebSocketSource(Uri tunnelUri, ProxyConfig proxyConfig) {
-        _tunnelUri = tunnelUri;
-        _proxyConfig = proxyConfig;
+        this.tunnelUri = tunnelUri;
+        this.proxyConfig = proxyConfig;
     }
 
     public void Dispose() {
@@ -39,11 +39,11 @@ internal class AutoconnectWebSocketSource : IWebSocketSource {
 
     public async Task<WebSocket> GetWebSocket(CancellationToken token) {
         var ws = new ClientWebSocket();
-        _proxyConfig.Configure(ws, _tunnelUri);
+        proxyConfig.Configure(ws, tunnelUri);
 
-        Console.WriteLine($"connecting new WebSocket to {_tunnelUri}");
+        Console.WriteLine($"connecting new WebSocket to {tunnelUri}");
 
-        await ws.ConnectAsync(_tunnelUri, token);
+        await ws.ConnectAsync(tunnelUri, token);
 
         return ws;
     }

@@ -4,18 +4,18 @@ using System.Net.WebSockets;
 namespace WebStunnel;
 
 internal class Bridge {
-    private readonly Codec _codec;
-    private readonly Socket _sock;
-    private readonly byte[] _sockRecvBuffer, _wsRecvBuffer;
-    private readonly WebSocket _ws;
+    private readonly Codec codec;
+    private readonly Socket sock;
+    private readonly byte[] sockRecvBuffer, wsRecvBuffer;
+    private readonly WebSocket ws;
 
     internal Bridge(Socket sock, WebSocket ws, ProtocolByte protoByte, Config config) {
-        _sock = sock;
-        _ws = ws;
-        _codec = new Codec(protoByte, config);
+        this.sock = sock;
+        this.ws = ws;
+        codec = new Codec(protoByte, config);
 
-        _sockRecvBuffer = new byte[1024 * 1024];
-        _wsRecvBuffer = new byte[1024 * (1024 + 1)];
+        sockRecvBuffer = new byte[1024 * 1024];
+        wsRecvBuffer = new byte[1024 * (1024 + 1)];
     }
 
     internal async Task Transit() {
@@ -40,8 +40,8 @@ internal class Bridge {
         var token = Utils.TimeoutToken();
 
         Console.WriteLine("init handshake");
-        var init = _sockRecvBuffer.AsSegment(0, Codec.InitMessageSize);
-        init = _codec.InitHandshake(init);
+        var init = sockRecvBuffer.AsSegment(0, Codec.InitMessageSize);
+        init = codec.InitHandshake(init);
 
         Console.WriteLine("  sending");
         await WsSend(init, token);
@@ -52,19 +52,19 @@ internal class Bridge {
             throw new Exception("did not receive handshake");
 
         Console.WriteLine("  verifying");
-        _codec.VerifyHandshake(remInit);
+        codec.VerifyHandshake(remInit);
 
         Console.WriteLine("  ok");
     }
 
     private async Task SocketToWs(CancellationToken token) {
         try {
-            while (_sock.Connected) {
+            while (sock.Connected) {
                 var (seg, handle) = await SockRecv(token);
                 if (!handle)
                     break;
 
-                seg = _codec.AuthMessage(seg);
+                seg = codec.AuthMessage(seg);
 
                 await WsSend(seg, token);
             }
@@ -77,12 +77,12 @@ internal class Bridge {
 
     private async Task WsToSocket(CancellationToken token) {
         try {
-            while (_ws.State == WebSocketState.Open) {
+            while (ws.State == WebSocketState.Open) {
                 var (seg, handle) = await WsRecv(token);
                 if (!handle)
                     continue;
 
-                seg = _codec.VerifyMessage(seg);
+                seg = codec.VerifyMessage(seg);
 
                 await SockSend(seg, token);
             }
@@ -94,10 +94,10 @@ internal class Bridge {
     }
 
     private async Task<(ArraySegment<byte> seg, bool handle)> SockRecv(CancellationToken token) {
-        Array.Fill(_sockRecvBuffer, default);
-        var seg = _sockRecvBuffer.AsSegment();
+        Array.Fill(sockRecvBuffer, default);
+        var seg = sockRecvBuffer.AsSegment();
 
-        var r = await _sock.ReceiveAsync(seg, SocketFlags.None, token);
+        var r = await sock.ReceiveAsync(seg, SocketFlags.None, token);
 
         seg = seg[..r];
         var handle = r > 0;
@@ -106,15 +106,15 @@ internal class Bridge {
     }
 
     private async Task SockSend(ArraySegment<byte> seg, CancellationToken token) {
-        await _sock.SendAsync(seg, SocketFlags.None, token);
+        await sock.SendAsync(seg, SocketFlags.None, token);
     }
 
     private async Task<(ArraySegment<byte> seg, bool handle)> WsRecv(CancellationToken token) {
-        Array.Fill(_wsRecvBuffer, default);
-        var seg = _wsRecvBuffer.AsSegment();
+        Array.Fill(wsRecvBuffer, default);
+        var seg = wsRecvBuffer.AsSegment();
 
         while (seg.Count > 0) {
-            var recv = await _ws.ReceiveAsync(seg, token);
+            var recv = await ws.ReceiveAsync(seg, token);
             if (recv.MessageType != WebSocketMessageType.Binary)
                 return (seg, false);
 
@@ -132,14 +132,14 @@ internal class Bridge {
     }
 
     private async Task WsSend(ArraySegment<byte> seg, CancellationToken token) {
-        await _ws.SendAsync(seg,
+        await ws.SendAsync(seg,
             WebSocketMessageType.Binary,
             WebSocketMessageFlags.EndOfMessage | WebSocketMessageFlags.DisableCompression,
             token);
     }
 
     private async Task Close() {
-        _sock.ForceClose();
-        await _ws.ForceCloseAsync();
+        sock.ForceClose();
+        await ws.ForceCloseAsync();
     }
 }

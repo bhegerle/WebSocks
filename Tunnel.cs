@@ -1,23 +1,23 @@
 ﻿namespace WebStunnel;
 
 internal sealed class Tunnel : IDisposable {
-    private readonly ProtocolByte _protoByte;
-    private readonly Config _config;
-    private readonly IWebSocketSource _wsEnum;
-    private readonly SemaphoreSlim _mutex;
-    private Channel _curr;
+    private readonly ProtocolByte protoByte;
+    private readonly Config config;
+    private readonly IWebSocketSource wsEnum;
+    private readonly SemaphoreSlim mutex;
+    private Channel curr;
 
     internal Tunnel(ProtocolByte protoByte, Config config, IWebSocketSource wsSrc) {
-        _protoByte = protoByte;
-        _config = config;
-        _wsEnum = wsSrc;
-        _mutex = new SemaphoreSlim(1);
+        this.protoByte = protoByte;
+        this.config = config;
+        wsEnum = wsSrc;
+        mutex = new SemaphoreSlim(1);
     }
 
     public void Dispose() {
-        using (_curr)
-        using (_mutex)
-        using (_wsEnum)
+        using (curr)
+        using (mutex)
+        using (wsEnum)
             return;
     }
 
@@ -42,33 +42,33 @@ internal sealed class Tunnel : IDisposable {
     }
 
     private async Task<Channel> GetCurrentChannel(CancellationToken token) {
-        await _mutex.WaitAsync(token);
+        await mutex.WaitAsync(token);
         try {
-            if (_curr == null) {
-                var ws = await _wsEnum.GetWebSocket(token);
-                var c = new Codec(_protoByte, _config);
+            if (curr == null) {
+                var ws = await wsEnum.GetWebSocket(token);
+                var c = new Codec(protoByte, config);
                 var next = new Channel(ws, c);
 
                 await next.HandshakeCheck(token);
 
-                _curr = next;
+                curr = next;
             }
 
-            return _curr;
+            return curr;
         } finally {
-            _mutex.Release();
+            mutex.Release();
         }
     }
 
     private async Task Close(IDisposable d) {
-        await _mutex.WaitAsync();
+        await mutex.WaitAsync();
         try {
             d.Dispose();
-            if (ReferenceEquals(_curr, d)) {
-                _curr = null;
+            if (ReferenceEquals(curr, d)) {
+                curr = null;
             }
         } finally {
-            _mutex.Release();
+            mutex.Release();
         }
     }
 }

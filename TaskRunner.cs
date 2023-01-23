@@ -1,21 +1,21 @@
 ﻿namespace WebStunnel; 
 
 internal class TaskRunner {
-    private readonly List<Task> _newTasks;
-    private readonly SemaphoreSlim _sem, _mutex;
-    private readonly bool _active;
+    private readonly List<Task> newTasks;
+    private readonly SemaphoreSlim sem, mutex;
+    private readonly bool active;
 
     internal TaskRunner() {
-        _sem = new SemaphoreSlim(0);
-        _mutex = new SemaphoreSlim(1);
-        _active = true;
+        sem = new SemaphoreSlim(0);
+        mutex = new SemaphoreSlim(1);
+        active = true;
 
-        _newTasks = new List<Task> { WaitLoop() };
+        newTasks = new List<Task> { WaitLoop() };
     }
 
     internal async Task AddTask(Task task) {
         await PrivateAdd(task);
-        _sem.Release();
+        sem.Release();
     }
 
     internal async Task RunAll() {
@@ -32,30 +32,30 @@ internal class TaskRunner {
     }
 
     private async Task WaitLoop() {
-        await _sem.WaitAsync();
+        await sem.WaitAsync();
 
-        if (_active) {
+        if (active) {
             await PrivateAdd(WaitLoop());
         }
     }
 
     private async Task PrivateAdd(Task task) {
-        await _mutex.WaitAsync();
+        await mutex.WaitAsync();
         try {
-            _newTasks.Add(task);
+            newTasks.Add(task);
         } finally {
-            _mutex.Release();
+            mutex.Release();
         }
     }
 
     private async Task<Task[]> GetTasks() {
-        await _sem.WaitAsync();
+        await sem.WaitAsync();
         try {
-            var a = _newTasks.ToArray();
-            _newTasks.Clear();
+            var a = newTasks.ToArray();
+            newTasks.Clear();
             return a;
         } finally {
-            _sem.Release();
+            sem.Release();
         }
     }
 }
