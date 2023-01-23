@@ -32,14 +32,13 @@ internal class WebSocketsServer {
         Console.WriteLine($"request from {ctx.GetEndpoint()}");
 
         if (ctx.WebSockets.IsWebSocketRequest) {
-            using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+            var ws = await ctx.WebSockets.AcceptWebSocketAsync();
             Console.WriteLine("accepted WebSocket");
 
-            var s = new Socket(SocketType.Stream, ProtocolType.Tcp);
-            await s.ConnectAsync(TunnelUri.EndPoint(), Utils.TimeoutToken());
+            var wsSrc = new SingletonWebSocketSource(ws);
+            var b = new Tunnel(ProtocolByte.WsListener, _config, wsSrc);
 
-            var b = new Bridge(s, ws, ProtocolByte.WsListener, _config);
-            await b.Transit();
+            await b.Receive(new byte[1000000], Utils.IdleTimeout());
         } else {
             Console.WriteLine("not WebSocket");
             ctx.Response.StatusCode = StatusCodes.Status400BadRequest;

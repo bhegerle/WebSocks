@@ -4,12 +4,17 @@ using static System.Security.Cryptography.HMACSHA512;
 
 namespace WebStunnel;
 
+internal enum CodecState {
+    Init,
+    Handshake,
+    Active,
+    Error
+}
+
 internal class Codec {
     private const int HashSize = 512 / 8;
     private readonly ArraySegment<byte> _key, _auth, _verify, _tmp;
     private readonly byte _protoByte;
-
-    private State _state;
 
     internal Codec(ProtocolByte protoByte, Config config) {
         if (string.IsNullOrEmpty(config.Key))
@@ -22,18 +27,20 @@ internal class Codec {
         _auth = new byte[HashSize];
         _verify = new byte[HashSize];
         _tmp = new byte[HashSize];
+
+        State = CodecState.Init;
     }
 
+    internal CodecState State { get; private set; }
     internal static int InitMessageSize => HashSize;
 
     internal ArraySegment<byte> InitHandshake(ArraySegment<byte> seg) {
         try {
-            Transition(State.Init, State.Handshake);
-
-            if (seg.Count != InitMessageSize)
-                throw new Exception("wrong size for init auth message");
+            Transition(CodecState.Init, CodecState.Handshake);
 
             using var rng = RandomNumberGenerator.Create();
+
+            seg = seg[..InitMessageSize];
             rng.GetBytes(seg);
 
             return seg;
@@ -43,19 +50,9 @@ internal class Codec {
         }
     }
 
-    internal ArraySegment<byte> AuthMessage(ArraySegment<byte> seg) {
-        try {
-            CheckState(State.Active);
-            return AuthMsg(seg);
-        } catch {
-            SetError();
-            throw;
-        }
-    }
-
     internal void VerifyHandshake(ArraySegment<byte> seg) {
         try {
-            Transition(State.Handshake, State.Active);
+            Transition(CodecState.Handshake, CodecState.Active);
 
             if (seg.Count != InitMessageSize)
                 throw new Exception("wrong size for init handshake message");
@@ -71,9 +68,19 @@ internal class Codec {
         }
     }
 
+    internal ArraySegment<byte> AuthMessage(ArraySegment<byte> seg) {
+        try {
+            CheckState(CodecState.Active);
+            return AuthMsg(seg);
+        } catch {
+            SetError();
+            throw;
+        }
+    }
+
     internal ArraySegment<byte> VerifyMessage(ArraySegment<byte> seg) {
         try {
-            CheckState(State.Active);
+            CheckState(CodecState.Active);
             return VerifyMsg(seg);
         } catch {
             SetError();
@@ -105,18 +112,18 @@ internal class Codec {
         return msg.Message;
     }
 
-    private void CheckState(State expected) {
-        if (_state != expected)
+    private void CheckState(CodecState expected) {
+        if (State != expected)
             throw new Exception("invalid codec state");
     }
 
-    private void Transition(State expected, State next) {
+    private void Transition(CodecState expected, CodecState next) {
         CheckState(expected);
-        _state = next;
+        State = next;
     }
 
     private void SetError() {
-        _state = State.Error;
+        State = CodecState.Error;
     }
 
     private static byte[] Cat(byte b, ArraySegment<byte> seg0, ArraySegment<byte> seg1) {
@@ -125,13 +132,6 @@ internal class Codec {
         seg0.CopyTo(cat, 1);
         seg1.CopyTo(cat, seg0.Count + 1);
         return cat;
-    }
-
-    private enum State {
-        Init,
-        Handshake,
-        Active,
-        Error
     }
 
     private readonly struct Frame {

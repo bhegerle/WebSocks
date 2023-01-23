@@ -8,6 +8,7 @@ internal class TcpServer {
     private readonly Config _config;
     private readonly List<Task> _newTasks;
     private readonly SemaphoreSlim _sem;
+    private readonly ArraySegment<byte> _wsRecvBuffer;
 
     internal TcpServer(Config config) {
         config.ListenUri.CheckUri("listen", "tcp");
@@ -16,6 +17,8 @@ internal class TcpServer {
 
         _newTasks = new List<Task>();
         _sem = new SemaphoreSlim(1);
+
+        _wsRecvBuffer = new byte[1024 * 1024];
     }
 
     private EndPoint EndPoint => _config.ListenUri.EndPoint();
@@ -23,7 +26,17 @@ internal class TcpServer {
     private ProxyConfig ProxyConfig => _config.Proxy;
 
     internal async Task Start() {
-        var listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
+        var autoWsSrc=new AutoconnectWebSocketSource(TunnelUri, ProxyConfig);
+        var tunnel = new Tunnel(ProtocolByte.TcpListener, _config, autoWsSrc);
+
+        var x = await tunnel.Receive(_wsRecvBuffer, Utils.IdleTimeout());
+
+        return;
+
+        await Probe.WsHost(TunnelUri, ProxyConfig);
+
+
+        using var listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
         listener.Bind(EndPoint);
         listener.Listen();
 
@@ -36,15 +49,14 @@ internal class TcpServer {
         var activeTasks = new List<Task>();
         while (true) {
             activeTasks.AddRange(await GetTasks());
-            if (activeTasks.Count == 0)
+            if (activeTasks.Count == 0) {
                 break;
+            }
 
             var doneTask = await Task.WhenAny(activeTasks);
             await doneTask;
             activeTasks.Remove(doneTask);
         }
-
-        listener.Dispose();
     }
 
     private async Task Accept(Socket listener) {
@@ -52,8 +64,9 @@ internal class TcpServer {
             var s = await listener.AcceptAsync();
             await AddTask(Handle(s));
 
-            if (!listener.SafeHandle.IsClosed)
+            if (!listener.SafeHandle.IsClosed) {
                 await AddTask(Accept(listener));
+            }
         } catch (Exception e) {
             Console.WriteLine($"exception in listen loop: {e}");
         }

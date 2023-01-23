@@ -41,6 +41,18 @@ internal static class Utils {
         return cts.Token;
     }
 
+    internal static CancellationToken IdleTimeout() { 
+        var cts = new CancellationTokenSource();
+        cts.CancelAfter(Config.IdleTimeout);
+        return cts.Token;
+    }
+
+    internal static CancellationToken TimeoutToken() { 
+        var cts = new CancellationTokenSource();
+        cts.CancelAfter(Config.Timeout);
+        return cts.Token;
+    }
+
     internal static void ForceClose(this Socket s) {
         try {
             if (s.Connected) s.Close(100);

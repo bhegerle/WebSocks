@@ -39,16 +39,22 @@ internal class Bridge {
     private async Task Handshake() {
         var token = Utils.TimeoutToken();
 
+        Console.WriteLine("init handshake");
         var init = _sockRecvBuffer.AsSegment(0, Codec.InitMessageSize);
         init = _codec.InitHandshake(init);
 
+        Console.WriteLine("  sending");
         await WsSend(init, token);
 
+        Console.WriteLine("  receiving");
         var (remInit, handle) = await WsRecv(token);
         if (!handle)
             throw new Exception("did not receive handshake");
 
+        Console.WriteLine("  verifying");
         _codec.VerifyHandshake(remInit);
+
+        Console.WriteLine("  ok");
     }
 
     private async Task SocketToWs(CancellationToken token) {
