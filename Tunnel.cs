@@ -1,13 +1,11 @@
-﻿using System.Net.WebSockets;
-
-namespace WebStunnel;
+﻿namespace WebStunnel;
 
 internal sealed class Tunnel : IDisposable {
     private readonly ProtocolByte _protoByte;
     private readonly Config _config;
     private readonly IWebSocketSource _wsEnum;
     private readonly SemaphoreSlim _mutex;
-    private WebSocketEncoder _curr;
+    private Channel _curr;
 
     internal Tunnel(ProtocolByte protoByte, Config config, IWebSocketSource wsSrc) {
         _protoByte = protoByte;
@@ -24,36 +22,36 @@ internal sealed class Tunnel : IDisposable {
     }
 
     internal async Task Send(ArraySegment<byte> seg, CancellationToken token) {
-        var c = await GetCurrentWs(token);
+        var c = await GetCurrentChannel(token);
         try {
             await c.Send(seg, token);
         } catch {
-            await CloseWs(c);
+            await Close(c);
             throw;
         }
     }
 
     internal async Task<ArraySegment<byte>> Receive(ArraySegment<byte> seg, CancellationToken token) {
-        var c = await GetCurrentWs(token);
+        var c = await GetCurrentChannel(token);
         try {
             return await c.Receive(seg, token);
         } catch {
-            await CloseWs(c);
+            await Close(c);
             throw;
         }
     }
 
-    private async Task<WebSocketEncoder> GetCurrentWs(CancellationToken token) {
+    private async Task<Channel> GetCurrentChannel(CancellationToken token) {
         await _mutex.WaitAsync(token);
         try {
             if (_curr == null) {
-                var w = await _wsEnum.GetWebSocket(token);
+                var ws = await _wsEnum.GetWebSocket(token);
                 var c = new Codec(_protoByte, _config);
+                var next = new Channel(ws, c);
 
-                var nextWs = new WebSocketEncoder(w, c);
-                await nextWs.HandshakeCheck(token);
+                await next.HandshakeCheck(token);
 
-                _curr = nextWs;
+                _curr = next;
             }
 
             return _curr;
@@ -62,7 +60,7 @@ internal sealed class Tunnel : IDisposable {
         }
     }
 
-    private async Task CloseWs(IDisposable d) {
+    private async Task Close(IDisposable d) {
         await _mutex.WaitAsync();
         try {
             d.Dispose();

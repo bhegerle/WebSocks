@@ -1,12 +1,12 @@
 ﻿using System.Net.WebSockets;
 
 namespace WebStunnel {
-    internal class WebSocketEncoder : IDisposable {
+    internal class Channel : IDisposable {
         private readonly WebSocket _ws;
         private readonly Codec _codec;
         private readonly SemaphoreSlim _mutex;
 
-        internal WebSocketEncoder(WebSocket ws, Codec codec) {
+        internal Channel(WebSocket ws, Codec codec) {
             _ws = ws;
             _codec = codec;
 

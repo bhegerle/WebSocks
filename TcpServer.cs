@@ -26,7 +26,7 @@ internal class TcpServer {
     private ProxyConfig ProxyConfig => _config.Proxy;
 
     internal async Task Start() {
-        var autoWsSrc=new AutoconnectWebSocketSource(TunnelUri, ProxyConfig);
+        var autoWsSrc = new AutoconnectWebSocketSource(TunnelUri, ProxyConfig);
         var tunnel = new Tunnel(ProtocolByte.TcpListener, _config, autoWsSrc);
 
         var x = await tunnel.Receive(_wsRecvBuffer, Utils.IdleTimeout());
