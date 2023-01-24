@@ -39,7 +39,7 @@ internal static class Utils {
     }
 
     internal static ArraySegment<byte> Extend(this ArraySegment<byte> x, int extensionCount) {
-        return new ArraySegment<byte>(x.Array, x.Offset, x.Offset + extensionCount);
+        return new ArraySegment<byte>(x.Array, x.Offset, x.Count + extensionCount);
     }
 
 #warning this is suspect

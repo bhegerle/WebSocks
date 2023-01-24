@@ -121,35 +121,70 @@ class SocketMap : ISocketMap {
 
 class AutoconnectSocketMap : ISocketMap {
     private readonly IPEndPoint endPoint;
+    private readonly SemaphoreSlim mutex;
     private readonly SocketMap sockMap;
 
     internal AutoconnectSocketMap(IPEndPoint endPoint) {
         this.endPoint = endPoint;
+        mutex = new SemaphoreSlim(1);
         sockMap = new SocketMap();
     }
 
     public async Task<Socket> GetSocket(ulong id) {
-        await Task.WhenAny();
-        var s = await sockMap.GetSocket(id, false);
-        if (s == null) {
-            throw new Exception("not impl");
+        await mutex.WaitAsync();
+        try {
+            var s = await sockMap.GetSocket(id, false);
+            if (s == null) {
+                s = await Connect();
+                await sockMap.AddSocket(id, s);
+            }
+
+            return s;
+        } finally {
+            mutex.Release();
         }
-        return s;
     }
 
     public async Task RemoveSocket(ulong id) {
-        await sockMap.RemoveSocket(id);
+        await mutex.WaitAsync();
+        try {
+            await sockMap.RemoveSocket(id);
+        } finally {
+            mutex.Release();
+        }
     }
 
     public async Task Reset() {
-        await sockMap.Reset();
+        await mutex.WaitAsync();
+        try {
+            await sockMap.Reset();
+        } finally {
+            mutex.Release();
+        }
     }
 
     public async Task<SocketSnapshot> Snapshot() {
-        return await sockMap.Snapshot();
+        await mutex.WaitAsync();
+        try {
+            return await sockMap.Snapshot();
+        } finally {
+            mutex.Release();
+        }
     }
 
     public void Dispose() {
         sockMap.Dispose();
+        mutex.Dispose();
+    }
+
+    private async Task<Socket> Connect() {
+        var s = new Socket(SocketType.Stream, ProtocolType.Tcp);
+
+        using var conTimeout = Timeouts.ConnectTimeout();
+        await s.ConnectAsync(endPoint, conTimeout.Token);
+
+        Console.WriteLine($"connected new socket to {endPoint}");
+
+        return s;
     }
 }

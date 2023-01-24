@@ -15,12 +15,14 @@ if (config.ListenUri.Scheme == "tcp") {
     ioTask = cli.Start(cts.Token);
 } else {
     var srv = new WebSocketsServer(config);
-    ioTask = srv.Start();
+    ioTask = srv.Start(cts.Token);
 }
 
 await ConsoleInterface.Run();
 
 Console.WriteLine("cancelling io tasks");
 cts.Cancel();
+
+await Task.WhenAny(ioTask);
 
 Console.WriteLine("bye");

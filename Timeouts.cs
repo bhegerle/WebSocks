@@ -5,6 +5,10 @@ internal static class Timeouts {
         return Timeout(Config.Timeout);
     }
 
+    internal static CancellationTokenSource ConnectTimeout() {
+        return Timeout(Config.ConnectTimeout);
+    }
+
     internal static CancellationTokenSource IdleTimeout() {
         return Timeout(Config.IdleTimeout);
     }

@@ -16,6 +16,7 @@ public record Config {
     internal static TimeSpan Timeout => TimeSpan.FromSeconds(20);
     internal static TimeSpan IdleTimeout => TimeSpan.FromMinutes(1);
     internal static TimeSpan ReconnectTimeout => TimeSpan.FromSeconds(7);
+    internal static TimeSpan ConnectTimeout => TimeSpan.FromSeconds(2);
 
     internal static async Task<Config> Load(string path) {
         await using var file = new FileStream(path, FileMode.Open, FileAccess.Read);

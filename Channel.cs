@@ -1,4 +1,5 @@
-﻿using System.Net.WebSockets;
+﻿using System.Linq;
+using System.Net.WebSockets;
 
 namespace WebStunnel {
     internal class Channel : IDisposable {
@@ -39,6 +40,8 @@ namespace WebStunnel {
         }
 
         internal async Task Send(ArraySegment<byte> seg, CancellationToken token) {
+            var n=seg.Count;
+
             await mutex.WaitAsync(token);
             try {
                 seg = codec.AuthMessage(seg);
@@ -46,11 +49,15 @@ namespace WebStunnel {
                 mutex.Release();
             }
 
+            Console.WriteLine($"sending {n} ({seg.Count} encoded)");
+
             await WsSend(seg, token);
         }
 
         internal async Task<ArraySegment<byte>> Receive(ArraySegment<byte> seg, CancellationToken token) {
             seg = await WsRecv(seg, token);
+
+            var n=seg.Count;
 
             await mutex.WaitAsync(token);
             try {
@@ -58,6 +65,8 @@ namespace WebStunnel {
             } finally {
                 mutex.Release();
             }
+
+            Console.WriteLine($"received {seg.Count} ({n} encoded)");
 
             return seg;
         }

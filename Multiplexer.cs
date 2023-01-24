@@ -22,6 +22,8 @@ namespace WebStunnel {
                     channel = await channelCon.Connect(token);
                     if (channel == null)
                         return;
+                } catch (OperationCanceledException) {
+                    throw;
                 } catch (Exception e) {
                     Console.WriteLine("could not connect channel");
                     Console.WriteLine($"{e.GetType()}: {e.Message}");
@@ -38,6 +40,8 @@ namespace WebStunnel {
                     await Task.WhenAny(trecv, srecv);
                     loopCts.Cancel();
                     await Task.WhenAll(trecv, srecv);
+                } catch (OperationCanceledException) {
+                    throw;
                 } catch {
                     // shouldn't happen
                 }
@@ -66,6 +70,7 @@ namespace WebStunnel {
                 }
             } catch {
                 Console.WriteLine("ws receive loop terminated");
+                throw;
             }
         }
 
@@ -92,6 +97,7 @@ namespace WebStunnel {
                 }
             } catch {
                 Console.WriteLine("socket map loop terminated");
+                throw;
             }
         }
 

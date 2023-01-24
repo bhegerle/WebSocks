@@ -43,6 +43,11 @@ internal class TcpServer {
             }
         } catch (OperationCanceledException) {
             Console.WriteLine("cancelled socket accept");
+            throw;
+        } catch (Exception e) {
+            Console.WriteLine("unexpected socket accept exception");
+            Console.WriteLine(e);
+            throw;
         } finally {
             Console.WriteLine("done accepting");
         }
@@ -57,9 +62,11 @@ internal class TcpServer {
             await multiplexer.Multiplex(token);
         } catch (OperationCanceledException) {
             Console.WriteLine("cancelled multiplexing");
-        }catch(Exception e){
-            Console.WriteLine("multiplexing exception");
+            throw;
+        } catch (Exception e) {
+            Console.WriteLine("unexpected multiplexing exception");
             Console.WriteLine(e);
+            throw;
         } finally {
             Console.WriteLine("done multiplexing");
         }

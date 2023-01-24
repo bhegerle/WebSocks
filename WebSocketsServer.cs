@@ -1,6 +1,4 @@
-﻿using System.Net.Sockets;
-
-namespace WebStunnel;
+﻿namespace WebStunnel;
 
 internal class WebSocketsServer {
     private readonly WebApplication app;
@@ -23,9 +21,16 @@ internal class WebSocketsServer {
 
     private Uri TunnelUri => config.TunnelUri;
 
-    internal async Task Start() {
+    internal async Task Start(CancellationToken token) {
         Console.WriteLine($"tunneling {config.ListenUri} -> {TunnelUri}");
-        await app.RunAsync();
+        await app.StartAsync();
+
+        try {
+            await Task.Delay(Timeout.Infinite, token);
+        } finally {
+            Console.WriteLine("cancelling ws tasks");
+            await app.StopAsync();
+        }
     }
 
     private async Task Handler(HttpContext ctx, RequestDelegate next) {
@@ -36,9 +41,12 @@ internal class WebSocketsServer {
             Console.WriteLine("accepted WebSocket");
 
             var wsSrc = new SingletonWebSocketSource(ws);
-            var b = new Tunnel(ProtocolByte.WsListener, config, wsSrc);
+            var channelCon = new ChannelConnector(ProtocolByte.WsListener, config, wsSrc);
+            var sockMap = new AutoconnectSocketMap(config.TunnelUri.EndPoint());
 
-            await b.Receive(new byte[1000000], Utils.IdleTimeout());
+            var multiplexer = new Multiplexer(channelCon, sockMap);
+
+            await multiplexer.Multiplex(ctx.RequestAborted);
         } else {
             Console.WriteLine("not WebSocket");
             ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
