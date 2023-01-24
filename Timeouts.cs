@@ -1,7 +1,7 @@
 ﻿namespace WebStunnel;
 
 internal static class Timeouts {
-    internal static CancellationTokenSource Timeout() {
+    internal static CancellationTokenSource SendTimeout() {
         return Timeout(Config.Timeout);
     }
 

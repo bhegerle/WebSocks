@@ -2,7 +2,7 @@
 
 namespace WebStunnel;
 
-public interface IWebSocketSource : IDisposable {
+public interface IWebSocketSource {
     Task<WebSocket> GetWebSocket(CancellationToken token);
 }
 
@@ -11,11 +11,6 @@ internal class SingletonWebSocketSource : IWebSocketSource {
 
     internal SingletonWebSocketSource(WebSocket ws) {
         this.ws = ws;
-    }
-
-    public void Dispose() {
-        using (ws)
-            return;
     }
 
     public Task<WebSocket> GetWebSocket(CancellationToken token) {
@@ -34,25 +29,13 @@ internal class AutoconnectWebSocketSource : IWebSocketSource {
         proxyConfig = config.Proxy;
     }
 
-    public void Dispose() {
-    }
-
     public async Task<WebSocket> GetWebSocket(CancellationToken token) {
-        try {
-            var ws = new ClientWebSocket();
-            proxyConfig.Configure(ws, tunnelUri);
+        var ws = new ClientWebSocket();
+        proxyConfig.Configure(ws, tunnelUri);
 
-            Console.WriteLine($"connecting new WebSocket to {tunnelUri}");
+        Console.WriteLine($"connecting to {tunnelUri}");
+        await ws.ConnectAsync(tunnelUri, token);
 
-            Console.WriteLine(token.WaitHandle.Handle);
-            await ws.ConnectAsync(tunnelUri, token);
-
-            Console.WriteLine($"established WebSocket to {tunnelUri}");
-
-            return ws;
-        } catch (Exception e) {
-            Console.WriteLine(e);
-            throw;
-        }
+        return ws;
     }
 }

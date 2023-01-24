@@ -43,18 +43,25 @@ internal class TcpServer {
             }
         } catch (OperationCanceledException) {
             Console.WriteLine("cancelled socket accept");
+        } finally {
+            Console.WriteLine("done accepting");
         }
     }
 
     private async Task Multiplex(CancellationToken token) {
         try {
             var wsSrc = new AutoconnectWebSocketSource(config);
-            var tunnel = new Tunnel(ProtocolByte.TcpListener, config, wsSrc);
-            using var multiplexer = new Multiplexer(tunnel, sockMap);
+            var channelCon = new ChannelConnector(ProtocolByte.TcpListener, config, wsSrc);
+            var multiplexer = new Multiplexer(channelCon, sockMap);
 
             await multiplexer.Multiplex(token);
         } catch (OperationCanceledException) {
-            Console.WriteLine("cancelled tunneling");
+            Console.WriteLine("cancelled multiplexing");
+        }catch(Exception e){
+            Console.WriteLine("multiplexing exception");
+            Console.WriteLine(e);
+        } finally {
+            Console.WriteLine("done multiplexing");
         }
     }
 

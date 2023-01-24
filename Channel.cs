@@ -14,6 +14,7 @@ namespace WebStunnel {
         }
 
         public void Dispose() {
+            Console.WriteLine("disposing WebSocket");
             ws?.Dispose();
         }
 

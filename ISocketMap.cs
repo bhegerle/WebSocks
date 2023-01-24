@@ -10,16 +10,17 @@ internal record SocketSnapshot(ImmutableDictionary<ulong, Socket> Sockets, Lifet
     }
 }
 
-internal interface ISocketMap : IDisposable {
+internal interface ISocketMap {
     Task<Socket> GetSocket(ulong id);
     Task RemoveSocket(ulong id);
+    Task Reset();
     Task<SocketSnapshot> Snapshot();
 }
 
 class SocketMap : ISocketMap {
     private readonly SemaphoreSlim mutex;
     private readonly Dictionary<ulong, Socket> sockMap;
-    private Lifetime snapshotLifetime;
+    private Lifetime lastSnapLifetime; // owned by that Snapshot
 
     internal SocketMap() {
         mutex = new SemaphoreSlim(1);
@@ -33,22 +34,42 @@ class SocketMap : ISocketMap {
     public async Task RemoveSocket(ulong id) {
         await mutex.WaitAsync();
         try {
-            sockMap.Remove(id);
+            if (sockMap.TryGetValue(id, out var s)) {
+                s.Dispose();
+                sockMap.Remove(id);
+            }
+
             ReplaceSnapshot();
         } finally {
             mutex.Release();
         }
+
+        Console.WriteLine($"removed connection {id}");
+    }
+
+    public async Task Reset() {
+        await mutex.WaitAsync();
+        try {
+            foreach (var s in sockMap.Values)
+                s.Dispose();
+
+            lastSnapLifetime = null;
+        } finally {
+            mutex.Release();
+        }
+
+        Console.WriteLine($"reset all connections");
     }
 
     public async Task<SocketSnapshot> Snapshot() {
         await mutex.WaitAsync();
         try {
-            if (snapshotLifetime != null)
+            if (lastSnapLifetime != null)
                 throw new Exception("concurrent snapshots not supported");
 
-            snapshotLifetime = new Lifetime();
+            lastSnapLifetime = new Lifetime();
 
-            return new SocketSnapshot(sockMap.ToImmutableDictionary(), snapshotLifetime);
+            return new SocketSnapshot(sockMap.ToImmutableDictionary(), lastSnapLifetime);
         } finally {
             mutex.Release();
         }
@@ -79,27 +100,22 @@ class SocketMap : ISocketMap {
         } finally {
             mutex.Release();
         }
+
+        Console.WriteLine($"added connection {id}");
     }
 
     public void Dispose() {
-        try {
-            mutex.Wait(TimeSpan.FromMilliseconds(1));
-        } catch (TimeoutException) {
-            Console.WriteLine("could not fully dispose socketMap due to mutex exception");
-            return;
-        }
-
         foreach (var s in sockMap.Values)
             s.Dispose();
 
-        mutex.Release();
+        mutex.Dispose();
     }
 
     private void ReplaceSnapshot() {
-        if (snapshotLifetime != null)
-            snapshotLifetime.Terminate();
+        if (lastSnapLifetime != null)
+            lastSnapLifetime.Terminate();
 
-        snapshotLifetime = null;
+        lastSnapLifetime = null;
     }
 }
 
@@ -123,6 +139,10 @@ class AutoconnectSocketMap : ISocketMap {
 
     public async Task RemoveSocket(ulong id) {
         await sockMap.RemoveSocket(id);
+    }
+
+    public async Task Reset() {
+        await sockMap.Reset();
     }
 
     public async Task<SocketSnapshot> Snapshot() {

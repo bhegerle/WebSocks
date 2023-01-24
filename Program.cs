@@ -8,7 +8,6 @@ if (config.LogPath != null)
     Utils.SetLogPath(config.LogPath);
 
 using var cts = new CancellationTokenSource();
-Console.WriteLine(cts.Token.WaitHandle.Handle);
 
 Task ioTask;
 if (config.ListenUri.Scheme == "tcp") {
@@ -19,7 +18,7 @@ if (config.ListenUri.Scheme == "tcp") {
     ioTask = srv.Start();
 }
 
-await ConsoleControl.Run();
+await ConsoleInterface.Run();
 
 Console.WriteLine("cancelling io tasks");
 cts.Cancel();
