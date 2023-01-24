@@ -1,114 +1,66 @@
 ﻿using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Security.Cryptography;
 
 namespace WebStunnel;
 
 internal class TcpServer {
     private readonly Config config;
-    private readonly List<Task> newTasks;
-    private readonly SemaphoreSlim sem;
-    private readonly ArraySegment<byte> wsRecvBuffer;
+    private readonly SocketMap sockMap;
 
     internal TcpServer(Config config) {
         config.ListenUri.CheckUri("listen", "tcp");
         config.TunnelUri.CheckUri("bridge", "ws");
         this.config = config;
-
-        newTasks = new List<Task>();
-        sem = new SemaphoreSlim(1);
-
-        wsRecvBuffer = new byte[1024 * 1024];
+        
+        sockMap = new SocketMap();
     }
 
-    private EndPoint EndPoint => config.ListenUri.EndPoint();
-    private Uri TunnelUri => config.TunnelUri;
-    private ProxyConfig ProxyConfig => config.Proxy;
+    internal async Task Start(CancellationToken token) {
+        var at = AcceptLoop(token);
+        var tt = Multiplex(token);
+        await Task.WhenAll(at, tt);
+    }
 
-    internal async Task Start() {
-        var autoWsSrc = new AutoconnectWebSocketSource(TunnelUri, ProxyConfig);
-        var tunnel = new Tunnel(ProtocolByte.TcpListener, config, autoWsSrc);
+    private async Task AcceptLoop(CancellationToken token) {
+        try {
+            using var rng = RandomNumberGenerator.Create();
 
-        var x = await tunnel.Receive(wsRecvBuffer, Utils.IdleTimeout());
+            using var listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
+            listener.Bind(config.ListenUri.EndPoint());
+            listener.Listen();
 
-        return;
+            Console.WriteLine($"listening on {listener.LocalEndPoint}");
 
-        await Probe.WsHost(TunnelUri, ProxyConfig);
+            while (true) {
+                var s = await listener.AcceptAsync(token);
+                var id = GetId(rng);
 
+                Console.WriteLine($"accepted connection {id} from {s.RemoteEndPoint}");
 
-        using var listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
-        listener.Bind(EndPoint);
-        listener.Listen();
-
-        await Probe.WsHost(TunnelUri, ProxyConfig);
-
-        Console.WriteLine($"tunneling {config.ListenUri} -> {TunnelUri}");
-
-        await AddTask(Accept(listener));
-
-        var activeTasks = new List<Task>();
-        while (true) {
-            activeTasks.AddRange(await GetTasks());
-            if (activeTasks.Count == 0) {
-                break;
+                await sockMap.AddSocket(id, s);
             }
-
-            var doneTask = await Task.WhenAny(activeTasks);
-            await doneTask;
-            activeTasks.Remove(doneTask);
+        } catch (OperationCanceledException) {
+            Console.WriteLine("cancelled socket accept");
         }
     }
 
-    private async Task Accept(Socket listener) {
+    private async Task Multiplex(CancellationToken token) {
         try {
-            var s = await listener.AcceptAsync();
-            await AddTask(Handle(s));
+            var wsSrc = new AutoconnectWebSocketSource(config);
+            var tunnel = new Tunnel(ProtocolByte.TcpListener, config, wsSrc);
+          using    var multiplexer = new Multiplexer(tunnel, sockMap);
 
-            if (!listener.SafeHandle.IsClosed) {
-                await AddTask(Accept(listener));
-            }
-        } catch (Exception e) {
-            Console.WriteLine($"exception in listen loop: {e}");
+            await multiplexer.Multiplex(token);
+        } catch (OperationCanceledException) {
+            Console.WriteLine("cancelled tunneling");
         }
     }
 
-    private async Task Handle(Socket s) {
-        try {
-            Console.WriteLine($"connection from {s.RemoteEndPoint}");
-
-            using var ws = new ClientWebSocket();
-            ProxyConfig.Configure(ws, TunnelUri);
-
-            await ws.ConnectAsync(TunnelUri, Utils.TimeoutToken());
-            Console.WriteLine($"bridging through {TunnelUri}");
-
-            var b = new Bridge(s, ws, ProtocolByte.TcpListener, config);
-            await b.Transit();
-        } catch (Exception e) {
-            Console.WriteLine($"exception in handling loop: {e}");
-        } finally {
-            Console.WriteLine("done handling connection");
-            s.Dispose();
-        }
-    }
-
-    private async Task AddTask(Task t) {
-        await sem.WaitAsync();
-        try {
-            newTasks.Add(t);
-        } finally {
-            sem.Release();
-        }
-    }
-
-    private async Task<Task[]> GetTasks() {
-        await sem.WaitAsync();
-        try {
-            var a = newTasks.ToArray();
-            newTasks.Clear();
-            return a;
-        } finally {
-            sem.Release();
-        }
+    private static ulong GetId(RandomNumberGenerator rng) {
+        var b = new byte[sizeof(ulong)];
+        rng.GetNonZeroBytes(b);
+        return BitConverter.ToUInt64(b);
     }
 }

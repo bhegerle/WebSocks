@@ -18,7 +18,8 @@ internal static class Utils {
 
     internal static bool ConjEqual(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b) {
         var eq = true;
-        for (var i = 0; i < a.Length && i < b.Length; i++) eq = eq && a[i] == b[i];
+        for (var i = 0; i < a.Length && i < b.Length; i++)
+            eq = (eq && a[i] == b[i]);
         return eq;
     }
 
@@ -35,22 +36,35 @@ internal static class Utils {
         return new ArraySegment<byte>(x, offset, count);
     }
 
+    internal static ArraySegment<byte> Extend(this ArraySegment<byte> x, int extensionCount) {
+        return new ArraySegment<byte>(x.Array, x.Offset, x.Offset + extensionCount);
+    }
+
     internal static CancellationToken TimeoutToken(bool longTimout = true) {
         var cts = new CancellationTokenSource();
         cts.CancelAfter(TimeSpan.FromMilliseconds(longTimout ? 2000 : 100));
         return cts.Token;
     }
 
-    internal static CancellationToken IdleTimeout() { 
+    internal static CancellationToken IdleTimeout() {
         var cts = new CancellationTokenSource();
         cts.CancelAfter(Config.IdleTimeout);
         return cts.Token;
     }
 
-    internal static CancellationToken TimeoutToken() { 
+    internal static CancellationToken TimeoutToken() {
         var cts = new CancellationTokenSource();
         cts.CancelAfter(Config.Timeout);
         return cts.Token;
+    }
+
+    internal static async Task Send(this Socket s, ArraySegment<byte> seg, CancellationToken token) {
+        await s.SendAsync(seg, SocketFlags.None, token);
+    }
+
+    internal static async Task<ArraySegment<byte>> Receive(this Socket s, ArraySegment<byte> seg, CancellationToken token) {
+        var n = await s.ReceiveAsync(seg, SocketFlags.None, token);
+        return seg[..n];
     }
 
     internal static void ForceClose(this Socket s) {

@@ -13,8 +13,8 @@ public record Config {
     internal Uri ListenUri => new(ListenOn);
     internal Uri TunnelUri => new(TunnelTo);
 
-    internal static TimeSpan Timeout => TimeSpan.FromSeconds(5);
-    internal static TimeSpan IdleTimeout => TimeSpan.FromMinutes(15);
+    internal static TimeSpan Timeout => TimeSpan.FromSeconds(20);
+    internal static TimeSpan IdleTimeout => TimeSpan.FromMinutes(1);
 
     internal static async Task<Config> Load(string path) {
         await using var file = new FileStream(path, FileMode.Open, FileAccess.Read);

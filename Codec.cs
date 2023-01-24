@@ -89,21 +89,21 @@ internal class Codec {
     }
 
     private ArraySegment<byte> AuthMsg(ArraySegment<byte> seg) {
-        var msg = new Frame(seg, true);
+        var msg = new Frame(seg, HashSize, true);
 
-        auth.CopyTo(msg.Hmac);
+        auth.CopyTo(msg.Suffix);
         HashData(key, msg.Complete, auth);
 
-        auth.CopyTo(msg.Hmac);
+        auth.CopyTo(msg.Suffix);
 
         return msg.Complete;
     }
 
     private ArraySegment<byte> VerifyMsg(ArraySegment<byte> seg) {
-        var msg = new Frame(seg, false);
+        var msg = new Frame(seg, HashSize, false);
 
-        msg.Hmac.CopyTo(tmp);
-        verify.CopyTo(msg.Hmac);
+        msg.Suffix.CopyTo(tmp);
+        verify.CopyTo(msg.Suffix);
         HashData(key, msg.Complete, verify);
 
         if (!Utils.ConjEqual(verify, tmp))
@@ -133,17 +133,21 @@ internal class Codec {
         seg1.CopyTo(cat, seg0.Count + 1);
         return cat;
     }
+}
 
-    private readonly struct Frame {
-        internal Frame(ArraySegment<byte> x, bool extend) {
-            if (extend)
-                x = x.Array.AsSegment(x.Offset, x.Count + HashSize);
+internal readonly struct Frame {
+    internal Frame(ArraySegment<byte> x, int suffixSize, bool extend) {
+        SuffixSize = suffixSize;
 
-            Complete = x;
-        }
+        if (extend)
+            x = x.Extend(suffixSize);
 
-        internal readonly ArraySegment<byte> Complete;
-        internal ArraySegment<byte> Message => Complete[..^HashSize];
-        internal ArraySegment<byte> Hmac => Complete[^HashSize..];
+        Complete = x;
     }
+
+    internal int SuffixSize { get; }
+    internal ArraySegment<byte> Complete { get; }
+
+    internal ArraySegment<byte> Message => Complete[..^SuffixSize];
+    internal ArraySegment<byte> Suffix => Complete[^SuffixSize..];
 }

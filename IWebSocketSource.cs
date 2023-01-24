@@ -29,9 +29,9 @@ internal class AutoconnectWebSocketSource : IWebSocketSource {
     private readonly Uri tunnelUri;
     private readonly ProxyConfig proxyConfig;
 
-    internal AutoconnectWebSocketSource(Uri tunnelUri, ProxyConfig proxyConfig) {
-        this.tunnelUri = tunnelUri;
-        this.proxyConfig = proxyConfig;
+    internal AutoconnectWebSocketSource(Config config) {
+        tunnelUri = config.TunnelUri;
+        proxyConfig = config.Proxy;
     }
 
     public void Dispose() {

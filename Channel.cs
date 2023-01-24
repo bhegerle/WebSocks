@@ -21,7 +21,7 @@ namespace WebStunnel {
             await mutex.WaitAsync(token);
             try {
                 if (codec.State == CodecState.Init) {
-                    Console.WriteLine("init handshake");
+                    Console.WriteLine("    init handshake");
 
                     var seg = new byte[Codec.InitMessageSize];
                     var sendSeg = codec.InitHandshake(seg);
@@ -30,7 +30,7 @@ namespace WebStunnel {
                     var recvSeg = await WsRecv(seg, token);
                     codec.VerifyHandshake(recvSeg);
 
-                    Console.WriteLine("completed handshake");
+                    Console.WriteLine("    completed handshake");
                 }
             } finally {
                 mutex.Release();
