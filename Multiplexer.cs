@@ -50,7 +50,7 @@ namespace WebStunnel {
             var taskMap = new Dictionary<ulong, Task>();
 
             while (true) {
-                var snap = await sockMap.Snapshot();
+                using var snap = await sockMap.Snapshot();
 
                 var newInSnap = snap.Sockets.Keys.Except(taskMap.Keys);
                 foreach (var sid in newInSnap) {
@@ -65,7 +65,7 @@ namespace WebStunnel {
                         taskMap.Remove(tid);
                 }
 
-                await snap.ReplacementSnapshotAvailable.UntilCancelled(token);
+                await snap.Lifetime.WhileAlive(token);
             }
             } catch {
                 Console.WriteLine("socket map loop terminated");

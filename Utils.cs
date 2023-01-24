@@ -64,6 +64,7 @@ internal static class Utils {
     internal static async Task UntilCancelled(this Task t, CancellationToken token) {
         var delay = Task.Delay(Timeout.Infinite, token);
         await Task.WhenAny(t, delay);
+        await t;
     }
 
     internal static async Task<bool> DidCompleteWithin(this Task t, TimeSpan timeout) {

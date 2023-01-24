@@ -4,7 +4,11 @@ using System.Net.Sockets;
 
 namespace WebStunnel;
 
-internal record SocketSnapshot(ImmutableDictionary<ulong, Socket> Sockets, Task ReplacementSnapshotAvailable);
+internal record SocketSnapshot(ImmutableDictionary<ulong, Socket> Sockets, Lifetime Lifetime) : IDisposable {
+    public void Dispose() {
+        Lifetime.Dispose();
+    }
+}
 
 internal interface ISocketMap : IDisposable {
     Task<Socket> GetSocket(ulong id);
@@ -15,13 +19,11 @@ internal interface ISocketMap : IDisposable {
 class SocketMap : ISocketMap {
     private readonly SemaphoreSlim mutex;
     private readonly Dictionary<ulong, Socket> sockMap;
-    private SemaphoreSlim repAvailSem;
-    private bool tookRepSem;
+    private Lifetime snapshotLifetime;
 
     internal SocketMap() {
         mutex = new SemaphoreSlim(1);
         sockMap = new Dictionary<ulong, Socket>();
-        replSnapTaskSrc = new TaskCompletionSource();
     }
 
     public async Task<Socket> GetSocket(ulong id) {
@@ -41,24 +43,15 @@ class SocketMap : ISocketMap {
     public async Task<SocketSnapshot> Snapshot() {
         await mutex.WaitAsync();
         try {
-            return new SocketSnapshot(sockMap.ToImmutableDictionary(), repAvailSem);
+            if (snapshotLifetime != null)
+                throw new Exception("concurrent snapshots not supported");
+
+            snapshotLifetime = new Lifetime();
+
+            return new SocketSnapshot(sockMap.ToImmutableDictionary(), snapshotLifetime);
         } finally {
             mutex.Release();
         }
-    }
-
-    public void Dispose() {
-        try {
-            mutex.Wait(TimeSpan.FromMilliseconds(1));
-        } catch (TimeoutException) {
-            Console.WriteLine("could not fully dispose socketMap due to mutex exception");
-            return;
-        }
-
-        foreach (var s in sockMap.Values)
-            s.Dispose();
-
-        mutex.Release();
     }
 
     internal async Task<Socket> GetSocket(ulong id, bool required) {
@@ -88,9 +81,25 @@ class SocketMap : ISocketMap {
         }
     }
 
+    public void Dispose() {
+        try {
+            mutex.Wait(TimeSpan.FromMilliseconds(1));
+        } catch (TimeoutException) {
+            Console.WriteLine("could not fully dispose socketMap due to mutex exception");
+            return;
+        }
+
+        foreach (var s in sockMap.Values)
+            s.Dispose();
+
+        mutex.Release();
+    }
+
     private void ReplaceSnapshot() {
-        replSnapTaskSrc.SetResult();
-        replSnapTaskSrc=new TaskCompletionSource();
+        if (snapshotLifetime != null)
+            snapshotLifetime.Terminate();
+
+        snapshotLifetime = null;
     }
 }
 
