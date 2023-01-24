@@ -12,7 +12,9 @@ namespace WebStunnel {
         }
 
         internal async Task Multiplex(CancellationToken token) {
-
+            var trecv = TunnelReceive(token);
+            var srecv = SocketMapLop(token);
+            await Task.WhenAll(trecv, srecv);
         }
 
         public void Dispose() {
@@ -21,23 +23,30 @@ namespace WebStunnel {
         }
 
         private async Task TunnelReceive(CancellationToken token) {
-            var seg = NewSeg();
-            var idBuf = new byte[sizeof(ulong)].AsSegment();
+            try {
+                var seg = NewSeg();
+                var idBuf = new byte[sizeof(ulong)].AsSegment();
 
-            while (true) {
-                using var cts = LinkTimeout(token, Config.IdleTimeout);
-                var msg = await tunnel.Receive(seg, cts.Token);
+                while (true) {
+                    using var recvTimeout = IdleTimeout();
+                    using var recvCts = recvTimeout.Token.Link(token);
 
-                var f = new Frame(msg, idBuf.Count, false);
-                var id = BitConverter.ToUInt64(f.Suffix);
-                var sock = await sockMap.GetSocket(id);
+                    var msg = await tunnel.Receive(seg, token);
 
-                using var sendTimeout = Timeout();
-                await sock.Send(f.Message, sendTimeout.Token);
+                    var f = new Frame(msg, idBuf.Count, false);
+                    var id = BitConverter.ToUInt64(f.Suffix);
+                    var sock = await sockMap.GetSocket(id);
+
+                    using var sendTimeout = Timeout();
+                    await sock.Send(f.Message, sendTimeout.Token);
+                }
+            } catch {
+                Console.WriteLine("tunnel receive loop terminated");
             }
         }
 
-        private async Task SocketReceive(CancellationToken token) {
+        private async Task SocketMapLop(CancellationToken token) {
+            try{
             var taskMap = new Dictionary<ulong, Task>();
 
             while (true) {
@@ -57,6 +66,9 @@ namespace WebStunnel {
                 }
 
                 await snap.ReplacementSnapshotAvailable.UntilCancelled(token);
+            }
+            } catch {
+                Console.WriteLine("socket map loop terminated");
             }
         }
 
@@ -82,20 +94,6 @@ namespace WebStunnel {
 
         private static ArraySegment<byte> NewSeg() {
             return new byte[1024 * 1024];
-        }
-
-        static CancellationTokenSource LinkTimeout(CancellationToken token, TimeSpan timeout) {
-            var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
-            cts.CancelAfter(timeout);
-            return cts;
-        }
-
-        static async Task WhenAnyCancelled(params CancellationToken[] tokens) {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(tokens);
-            try {
-                await Task.Delay(TimeSpan.MaxValue, cts.Token);
-            } catch (TaskCanceledException) {
-            }
         }
     }
 }

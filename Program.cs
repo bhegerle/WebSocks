@@ -8,16 +8,20 @@ if (config.LogPath != null)
     Utils.SetLogPath(config.LogPath);
 
 using var cts = new CancellationTokenSource();
+Console.WriteLine(cts.Token.WaitHandle.Handle);
 
-Console.CancelKeyPress += (_, evt) => {
-    cts.Cancel();
-    Thread.Sleep(1000);
-};
-
+Task ioTask;
 if (config.ListenUri.Scheme == "tcp") {
     var cli = new TcpServer(config);
-    await cli.Start(cts.Token);
+    ioTask = cli.Start(cts.Token);
 } else {
     var srv = new WebSocketsServer(config);
-    await srv.Start();
+    ioTask = srv.Start();
 }
+
+await ConsoleControl.Run();
+
+Console.WriteLine("cancelling io tasks");
+cts.Cancel();
+
+Console.WriteLine("bye");

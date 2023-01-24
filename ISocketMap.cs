@@ -15,7 +15,8 @@ internal interface ISocketMap : IDisposable {
 class SocketMap : ISocketMap {
     private readonly SemaphoreSlim mutex;
     private readonly Dictionary<ulong, Socket> sockMap;
-    private TaskCompletionSource replSnapTaskSrc;
+    private SemaphoreSlim repAvailSem;
+    private bool tookRepSem;
 
     internal SocketMap() {
         mutex = new SemaphoreSlim(1);
@@ -40,7 +41,7 @@ class SocketMap : ISocketMap {
     public async Task<SocketSnapshot> Snapshot() {
         await mutex.WaitAsync();
         try {
-            return new SocketSnapshot(sockMap.ToImmutableDictionary(), replSnapTaskSrc.Task);
+            return new SocketSnapshot(sockMap.ToImmutableDictionary(), repAvailSem);
         } finally {
             mutex.Release();
         }

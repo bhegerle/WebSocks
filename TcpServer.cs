@@ -13,7 +13,7 @@ internal class TcpServer {
         config.ListenUri.CheckUri("listen", "tcp");
         config.TunnelUri.CheckUri("bridge", "ws");
         this.config = config;
-        
+
         sockMap = new SocketMap();
     }
 
@@ -50,7 +50,7 @@ internal class TcpServer {
         try {
             var wsSrc = new AutoconnectWebSocketSource(config);
             var tunnel = new Tunnel(ProtocolByte.TcpListener, config, wsSrc);
-          using    var multiplexer = new Multiplexer(tunnel, sockMap);
+            using var multiplexer = new Multiplexer(tunnel, sockMap);
 
             await multiplexer.Multiplex(token);
         } catch (OperationCanceledException) {

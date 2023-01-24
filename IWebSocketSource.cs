@@ -38,13 +38,21 @@ internal class AutoconnectWebSocketSource : IWebSocketSource {
     }
 
     public async Task<WebSocket> GetWebSocket(CancellationToken token) {
-        var ws = new ClientWebSocket();
-        proxyConfig.Configure(ws, tunnelUri);
+        try {
+            var ws = new ClientWebSocket();
+            proxyConfig.Configure(ws, tunnelUri);
 
-        Console.WriteLine($"connecting new WebSocket to {tunnelUri}");
+            Console.WriteLine($"connecting new WebSocket to {tunnelUri}");
 
-        await ws.ConnectAsync(tunnelUri, token);
+            Console.WriteLine(token.WaitHandle.Handle);
+            await ws.ConnectAsync(tunnelUri, token);
 
-        return ws;
+            Console.WriteLine($"established WebSocket to {tunnelUri}");
+
+            return ws;
+        } catch (Exception e) {
+            Console.WriteLine(e);
+            throw;
+        }
     }
 }

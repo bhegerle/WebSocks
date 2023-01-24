@@ -72,6 +72,10 @@ internal static class Utils {
         return ReferenceEquals(t, done);
     }
 
+    internal static CancellationTokenSource Link(this CancellationToken token0, CancellationToken token1) {
+        return CancellationTokenSource.CreateLinkedTokenSource(token0, token1);
+    }
+
     internal static async Task Send(this Socket s, ArraySegment<byte> seg, CancellationToken token) {
         await s.SendAsync(seg, SocketFlags.None, token);
     }
