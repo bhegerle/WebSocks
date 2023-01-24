@@ -1,4 +1,5 @@
 ﻿using System.Net.Sockets;
+using static WebStunnel.Timeouts;
 
 namespace WebStunnel {
     internal class Multiplexer : IDisposable {
@@ -21,15 +22,18 @@ namespace WebStunnel {
 
         private async Task TunnelReceive(CancellationToken token) {
             var seg = NewSeg();
+            var idBuf = new byte[sizeof(ulong)].AsSegment();
 
             while (true) {
                 using var cts = LinkTimeout(token, Config.IdleTimeout);
                 var msg = await tunnel.Receive(seg, cts.Token);
 
-                ulong id = 0; // fixme get actual id
-
+                var f = new Frame(msg, idBuf.Count, false);
+                var id = BitConverter.ToUInt64(f.Suffix);
                 var sock = await sockMap.GetSocket(id);
-                await sock.Send(msg, cts.Token);
+
+                using var sendTimeout = Timeout();
+                await sock.Send(f.Message, sendTimeout.Token);
             }
         }
 
@@ -39,39 +43,37 @@ namespace WebStunnel {
             while (true) {
                 var snap = await sockMap.Snapshot();
 
-                foreach (var (id, s) in snap.Sockets) {
-                    if (!taskMap.ContainsKey(id))
-                        taskMap.Add(id, SocketReceive(id, s));
+                var newInSnap = snap.Sockets.Keys.Except(taskMap.Keys);
+                foreach (var sid in newInSnap) {
+                    taskMap.Add(sid, SocketReceive(sid, snap.Sockets[sid]));
+                    Console.WriteLine($"multiplexing connection {sid}");
                 }
 
-                await WhenAnyCancelled(token, snap.SnapshotToken);
-
-                if (snap.SnapshotToken.IsCancellationRequested) {
-                    var completed = taskMap
-                        .Where(e => e.Value.IsCompleted)
-                        .ToList();
-
-                    foreach (var e in completed)
-                        taskMap.Remove(e.Key);
+                var dropFromSnap = taskMap.Keys.Except(snap.Sockets.Keys);
+                foreach (var tid in dropFromSnap) {
+                    var t = taskMap[tid];
+                    if (await t.DidCompleteWithin(TimeSpan.FromMilliseconds(1)))
+                        taskMap.Remove(tid);
                 }
+
+                await snap.ReplacementSnapshotAvailable.UntilCancelled(token);
             }
         }
 
         private async Task SocketReceive(ulong id, Socket s) {
             var seg = NewSeg();
+            var idBuf = BitConverter.GetBytes(id).AsSegment();
 
             try {
                 while (true) {
-                    using var cts = new CancellationTokenSource();
-                    cts.CancelAfter(Config.IdleTimeout);
+                    using var recvTimeout = IdleTimeout();
+                    var msg = await s.Receive(seg, recvTimeout.Token);
 
-                    var msg = s.Receive(seg, cts.Token);
+                    var f = new Frame(msg, idBuf.Count, true);
+                    idBuf.CopyTo(f.Suffix);
 
-                    // add id
-
-                    using var cts2=new CancellationTokenSource();
-                    cts2.CancelAfter(Config.Timeout);
-                    await tunnel.Send(seg, cts2.Token);
+                    using var sendTimeout = Timeout();
+                    await tunnel.Send(f.Complete, sendTimeout.Token);
                 }
             } catch {
                 await sockMap.RemoveSocket(id);

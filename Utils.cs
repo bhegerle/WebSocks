@@ -1,4 +1,6 @@
-﻿using System.Net;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.TagHelpers.Cache;
+using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 
@@ -40,6 +42,7 @@ internal static class Utils {
         return new ArraySegment<byte>(x.Array, x.Offset, x.Offset + extensionCount);
     }
 
+#warning this is suspect
     internal static CancellationToken TimeoutToken(bool longTimout = true) {
         var cts = new CancellationTokenSource();
         cts.CancelAfter(TimeSpan.FromMilliseconds(longTimout ? 2000 : 100));
@@ -56,6 +59,17 @@ internal static class Utils {
         var cts = new CancellationTokenSource();
         cts.CancelAfter(Config.Timeout);
         return cts.Token;
+    }
+
+    internal static async Task UntilCancelled(this Task t, CancellationToken token) {
+        var delay = Task.Delay(Timeout.Infinite, token);
+        await Task.WhenAny(t, delay);
+    }
+
+    internal static async Task<bool> DidCompleteWithin(this Task t, TimeSpan timeout) {
+        var delay = Task.Delay(timeout);
+        var done = await Task.WhenAny(t, delay);
+        return ReferenceEquals(t, done);
     }
 
     internal static async Task Send(this Socket s, ArraySegment<byte> seg, CancellationToken token) {
@@ -84,7 +98,7 @@ internal static class Utils {
         }
     }
 
-    public static void SetLogPath(string path) {
+    internal static void SetLogPath(string path) {
         path = Path.GetFullPath(path);
 
         Console.WriteLine($"logging to {path}");

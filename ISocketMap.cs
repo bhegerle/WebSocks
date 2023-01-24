@@ -1,11 +1,10 @@
 ﻿using System.Collections.Immutable;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 
 namespace WebStunnel;
 
-internal record SocketSnapshot(ImmutableDictionary<ulong, Socket> Sockets, CancellationToken SnapshotToken);
+internal record SocketSnapshot(ImmutableDictionary<ulong, Socket> Sockets, Task ReplacementSnapshotAvailable);
 
 internal interface ISocketMap : IDisposable {
     Task<Socket> GetSocket(ulong id);
@@ -16,12 +15,12 @@ internal interface ISocketMap : IDisposable {
 class SocketMap : ISocketMap {
     private readonly SemaphoreSlim mutex;
     private readonly Dictionary<ulong, Socket> sockMap;
-    private CancellationTokenSource cts;
+    private TaskCompletionSource replSnapTaskSrc;
 
     internal SocketMap() {
         mutex = new SemaphoreSlim(1);
         sockMap = new Dictionary<ulong, Socket>();
-        cts = new CancellationTokenSource();
+        replSnapTaskSrc = new TaskCompletionSource();
     }
 
     public async Task<Socket> GetSocket(ulong id) {
@@ -41,16 +40,24 @@ class SocketMap : ISocketMap {
     public async Task<SocketSnapshot> Snapshot() {
         await mutex.WaitAsync();
         try {
-            return new SocketSnapshot(sockMap.ToImmutableDictionary(), cts.Token);
+            return new SocketSnapshot(sockMap.ToImmutableDictionary(), replSnapTaskSrc.Task);
         } finally {
             mutex.Release();
         }
     }
 
     public void Dispose() {
-        cts.Dispose();
-        foreach (var (_, s) in sockMap)
+        try {
+            mutex.Wait(TimeSpan.FromMilliseconds(1));
+        } catch (TimeoutException) {
+            Console.WriteLine("could not fully dispose socketMap due to mutex exception");
+            return;
+        }
+
+        foreach (var s in sockMap.Values)
             s.Dispose();
+
+        mutex.Release();
     }
 
     internal async Task<Socket> GetSocket(ulong id, bool required) {
@@ -81,10 +88,8 @@ class SocketMap : ISocketMap {
     }
 
     private void ReplaceSnapshot() {
-        cts.Cancel();
-        cts.Dispose();
-
-        cts = new CancellationTokenSource();
+        replSnapTaskSrc.SetResult();
+        replSnapTaskSrc=new TaskCompletionSource();
     }
 }
 
