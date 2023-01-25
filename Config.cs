@@ -14,9 +14,9 @@ public record Config {
     internal Uri ListenUri => new(ListenOn);
     internal Uri TunnelUri => new(TunnelTo);
 
-    internal static TimeSpan Timeout => TimeSpan.FromSeconds(20);
+    internal static TimeSpan SendTimeout => TimeSpan.FromSeconds(20);
     internal static TimeSpan IdleTimeout => TimeSpan.FromMinutes(1);
-    internal static TimeSpan ReconnectTimeout => TimeSpan.FromSeconds(7);
+    internal static TimeSpan ReconnectDelay => TimeSpan.FromSeconds(7);
     internal static TimeSpan ConnectTimeout => TimeSpan.FromSeconds(2);
 
     internal static async Task<Config> Load(string path) {

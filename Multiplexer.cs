@@ -15,35 +15,34 @@ namespace WebStunnel {
 
         internal async Task Multiplex(CancellationToken token) {
             while (true) {
-                if (channel != null)
-                    await Task.Delay(Config.ReconnectTimeout, token);
-
                 try {
-                    channel = await channelCon.Connect(token);
+                    if (channel != null)
+                        await Task.Delay(Config.ReconnectDelay, token);
+
+                    using var conTimeout = ConnectTimeout(token);
+                    channel = await channelCon.Connect(conTimeout.Token);
                     if (channel == null)
                         return;
-                } catch (OperationCanceledException) {
-                    throw;
-                } catch (Exception e) {
-                    await Log.Warn("could not connect channel", e);
-                    continue;
-                }
 
-                try {
-                    using var loopCts = new CancellationTokenSource();
-                    using var linkedCts = token.Link(loopCts.Token);
+                    using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(token);
 
-                    var trecv = ChannelReceiveLoop(linkedCts.Token);
-                    var srecv = SocketMapLoop(linkedCts.Token);
+                    var trecv = ChannelReceiveLoop(loopCts.Token);
+                    var srecv = SocketMapLoop(loopCts.Token);
 
                     await Task.WhenAny(trecv, srecv);
                     loopCts.Cancel();
                     await Task.WhenAll(trecv, srecv);
+                } catch (ChannelConnectionException e) {
+                    await Log.Warn(e.Message, e.InnerException);
                 } catch (OperationCanceledException) {
+                    await Log.Write("done multiplexing");
                     throw;
+                } catch (Exception e) {
+                    await Log.Error("unexpected exception while multiplexing", e);
+                    throw;
+                } finally {
+                    await sockMap.Reset();
                 }
-
-                await sockMap.Reset();
             }
         }
 
@@ -53,17 +52,15 @@ namespace WebStunnel {
                 var idBuf = new byte[SocketId.Size].AsSegment();
 
                 while (true) {
-                    using var recvTimeout = IdleTimeout();
-                    using var recvCts = recvTimeout.Token.Link(token);
-
-                    var msg = await channel.Receive(seg, token);
+                    using var recvTimeout = IdleTimeout(token);
+                    var msg = await channel.Receive(seg, recvTimeout.Token);
 
                     var f = new Frame(msg, idBuf.Count, false);
                     var id = new SocketId(f.Suffix);
-                    var sock = await sockMap.GetSocket(id);
+                    var sock = await sockMap.GetSocket(id, token);
 
                     if (f.Message.Count > 0) {
-                        using var sendTimeout = SendTimeout();
+                        using var sendTimeout = SendTimeout(token);
                         await sock.Send(f.Message, sendTimeout.Token);
                     } else {
                         await sockMap.RemoveSocket(id);

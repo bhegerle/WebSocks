@@ -8,19 +8,17 @@ await Log.Configure(config);
 
 using var cts = new CancellationTokenSource();
 
-Task ioTask;
-if (config.ListenUri.Scheme == "tcp") {
-    var cli = new TcpServer(config);
-    ioTask = cli.Start(cts.Token);
-} else {
-    var srv = new WebSocketsServer(config);
-    ioTask = srv.Start(cts.Token);
-}
+IServer server;
+if (config.ListenUri.Scheme == "tcp")
+    server = new TcpServer(config);
+else
+    server = new WebSocketsServer(config);
 
-var conTask = Control.RunUntilCancelled(cts);
+var srvTask = server.Start(cts.Token);
+var conTask = Control.Transfer(cts);
 
 try {
-    await Task.WhenAll(conTask, ioTask);
+    await Task.WhenAll(conTask, srvTask);
 } catch (OperationCanceledException) {
     // ignored
 } catch (Exception ex) {

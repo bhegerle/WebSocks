@@ -1,11 +1,9 @@
-﻿using System.Net;
-using System.Net.Sockets;
-using System.Net.WebSockets;
+﻿using System.Net.Sockets;
 using System.Security.Cryptography;
 
 namespace WebStunnel;
 
-internal class TcpServer {
+internal class TcpServer : IServer {
     private readonly Config config;
     private readonly SocketMap sockMap;
 
@@ -17,12 +15,17 @@ internal class TcpServer {
         sockMap = new SocketMap();
     }
 
-    internal async Task Start(CancellationToken token) {
+    public async Task Start(CancellationToken token) {
         await Log.Write($"tunneling {config.ListenUri} -> {config.TunnelUri}");
 
         var at = AcceptLoop(token);
         var tt = Multiplex(token);
         await Task.WhenAll(at, tt);
+    }
+
+    public ValueTask DisposeAsync() {
+        sockMap.Dispose();
+        return ValueTask.CompletedTask;
     }
 
     private async Task AcceptLoop(CancellationToken token) {

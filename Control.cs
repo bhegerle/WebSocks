@@ -1,7 +1,7 @@
 ﻿namespace WebStunnel;
 
 internal static class Control {
-    internal static async Task RunUntilCancelled(CancellationTokenSource cts) {
+    internal static async Task Transfer(CancellationTokenSource cts) {
         await Log.Write((LogLevel?)null, "type '.' to exit");
         while (true) {
             var line = await Console.In.ReadLineAsync();
@@ -9,7 +9,7 @@ internal static class Control {
                 break;
         }
 
-        await Log.Write("cancelling io tasks");
         cts.Cancel();
+        await Log.Write("shutting down");
     }
 }

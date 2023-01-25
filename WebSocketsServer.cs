@@ -1,6 +1,7 @@
 ﻿namespace WebStunnel;
 
-internal class WebSocketsServer {
+internal class WebSocketsServer : IServer {
+    private readonly CancellationTokenSource cts;
     private readonly WebApplication app;
     private readonly Config config;
 
@@ -10,9 +11,11 @@ internal class WebSocketsServer {
 
         this.config = config;
 
+        cts = new CancellationTokenSource();
+
         var builder = WebApplication.CreateBuilder(Array.Empty<string>());
         builder.Logging.ClearProviders();
-        builder.WebHost.ConfigureKestrel(srvOpt => { srvOpt.Listen(config.ListenUri.EndPoint()); });
+        builder.WebHost.ConfigureKestrel(srvOpt => srvOpt.Listen(config.ListenUri.EndPoint()));
 
         app = builder.Build();
         app.UseWebSockets();
@@ -21,7 +24,7 @@ internal class WebSocketsServer {
 
     private Uri TunnelUri => config.TunnelUri;
 
-    internal async Task Start(CancellationToken token) {
+    public async Task Start(CancellationToken token) {
         await Log.Write($"tunneling {config.ListenUri} -> {TunnelUri}");
         await app.StartAsync();
 
@@ -29,8 +32,14 @@ internal class WebSocketsServer {
             await Task.Delay(Timeout.Infinite, token);
         } finally {
             await Log.Write("cancelling ws tasks");
+            cts.Cancel();
             await app.StopAsync();
         }
+    }
+
+    public async ValueTask DisposeAsync() {
+        await app.DisposeAsync();
+        cts.Dispose();
     }
 
     private async Task Handler(HttpContext ctx, RequestDelegate next) {
@@ -46,7 +55,7 @@ internal class WebSocketsServer {
 
             var multiplexer = new Multiplexer(channelCon, sockMap);
 
-            await multiplexer.Multiplex(ctx.RequestAborted);
+            await multiplexer.Multiplex(cts.Token);
         } else {
             await Log.Warn("not WebSocket");
             ctx.Response.StatusCode = StatusCodes.Status400BadRequest;

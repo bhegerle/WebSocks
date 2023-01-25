@@ -4,6 +4,8 @@ using System.Net.Sockets;
 
 namespace WebStunnel;
 
+using static Timeouts;
+
 internal record SocketSnapshot(ImmutableDictionary<SocketId, Socket> Sockets, Lifetime Lifetime) : IDisposable {
     public void Dispose() {
         Lifetime.Dispose();
@@ -11,7 +13,7 @@ internal record SocketSnapshot(ImmutableDictionary<SocketId, Socket> Sockets, Li
 }
 
 internal interface ISocketMap {
-    Task<Socket> GetSocket(SocketId id);
+    Task<Socket> GetSocket(SocketId id, CancellationToken token);
     Task RemoveSocket(SocketId id);
     Task Reset();
 
@@ -29,7 +31,7 @@ class SocketMap : ISocketMap {
         sockMap = new Dictionary<SocketId, Socket>();
     }
 
-    public async Task<Socket> GetSocket(SocketId id) {
+    public async Task<Socket> GetSocket(SocketId id, CancellationToken _) {
         return await GetSocket(id, true);
     }
 
@@ -142,11 +144,11 @@ class AutoconnectSocketMap : ISocketMap {
         sockMap = new SocketMap();
     }
 
-    public async Task<Socket> GetSocket(SocketId id) {
+    public async Task<Socket> GetSocket(SocketId id, CancellationToken token) {
         var s = await sockMap.GetSocket(id, false);
 
         if (s == null) {
-            s = await Connect();
+            s = await Connect(token);
             await sockMap.AddSocket(id, s);
         }
 
@@ -173,11 +175,11 @@ class AutoconnectSocketMap : ISocketMap {
         sockMap.Dispose();
     }
 
-    private async Task<Socket> Connect() {
+    private async Task<Socket> Connect(CancellationToken token) {
         var s = new Socket(SocketType.Stream, ProtocolType.Tcp);
 
         try {
-            using var conTimeout = Timeouts.ConnectTimeout();
+            using var conTimeout = ConnectTimeout(token);
             await s.ConnectAsync(endPoint, conTimeout.Token);
         } catch (Exception e) {
             await Log.Warn($"could not connect to {endPoint}", e);

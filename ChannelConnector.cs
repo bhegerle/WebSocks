@@ -1,5 +1,10 @@
 ﻿namespace WebStunnel;
 
+internal class ChannelConnectionException : Exception {
+    internal ChannelConnectionException(Exception e) 
+        : base("could not connect channel", e) { }
+}
+
 internal class ChannelConnector {
     private readonly ProtocolByte protoByte;
     private readonly Config config;
@@ -12,17 +17,19 @@ internal class ChannelConnector {
     }
 
     public async Task<Channel> Connect(CancellationToken token) {
-        var ws = await wsSrc.GetWebSocket(token);
-        if (ws == null)
-            return null;
+        Channel c = null;
 
-        var c = new Channel(ws, new Codec(protoByte, config));
         try {
+            var ws = await wsSrc.GetWebSocket(token);
+            if (ws == null)
+                return null;
+
+            c = new Channel(ws, new Codec(protoByte, config));
             await c.HandshakeCheck(token);
             return c;
-        } catch {
-            c.Dispose();
-            throw;
+        } catch (Exception e) {
+            c?.Dispose();
+            throw new ChannelConnectionException(e);
         }
     }
 }
