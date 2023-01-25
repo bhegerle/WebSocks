@@ -14,7 +14,6 @@ namespace WebStunnel {
         }
 
         public void Dispose() {
-            Console.WriteLine("disposing WebSocket");
             ws?.Dispose();
         }
 
@@ -22,7 +21,7 @@ namespace WebStunnel {
             await mutex.WaitAsync(token);
             try {
                 if (codec.State == CodecState.Init) {
-                    Console.WriteLine("    init handshake");
+                    await Log.Write("    init handshake");
 
                     var seg = new byte[Codec.InitMessageSize];
                     var sendSeg = codec.InitHandshake(seg);
@@ -31,7 +30,7 @@ namespace WebStunnel {
                     var recvSeg = await WsRecv(seg, token);
                     codec.VerifyHandshake(recvSeg);
 
-                    Console.WriteLine("    completed handshake");
+                    await Log.Write("    completed handshake");
                 }
             } catch (Exception ex) {
                 await Log.Warn("handshake failed", ex);
@@ -51,8 +50,6 @@ namespace WebStunnel {
                 mutex.Release();
             }
 
-            Console.WriteLine($"sending {n} ({seg.Count} encoded)");
-
             await WsSend(seg, token);
         }
 
@@ -68,8 +65,6 @@ namespace WebStunnel {
                 mutex.Release();
             }
 
-            Console.WriteLine($"received {seg.Count} ({n} encoded)");
-
             return seg;
         }
 
@@ -79,10 +74,9 @@ namespace WebStunnel {
 
             while (seg.Count > 0) {
                 var recv = await ws.ReceiveAsync(seg, token);
-                if (recv.MessageType != WebSocketMessageType.Binary) {
+                if (recv.MessageType != WebSocketMessageType.Binary)
                     throw new Exception("non-binary message received");
-                }
-
+                
                 n += recv.Count;
                 seg = seg[recv.Count..];
 
@@ -90,7 +84,7 @@ namespace WebStunnel {
                     return init[..n];
                 }
 
-                Console.WriteLine($"ws partial: buffered {recv.Count} bytes");
+                await Log.Write($"ws partial: buffered {recv.Count} bytes");
             }
 
             throw new Exception("message exceeds segment");

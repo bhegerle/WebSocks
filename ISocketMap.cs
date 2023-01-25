@@ -14,7 +14,9 @@ internal interface ISocketMap {
     Task<Socket> GetSocket(SocketId id);
     Task RemoveSocket(SocketId id);
     Task Reset();
+
     Task<SocketSnapshot> Snapshot();
+    Task Detach(SocketSnapshot snap);
 }
 
 class SocketMap : ISocketMap {
@@ -44,7 +46,7 @@ class SocketMap : ISocketMap {
             mutex.Release();
         }
 
-        Console.WriteLine($"removed connection {id}");
+        await Log.Write($"removed connection {id}");
     }
 
     public async Task Reset() {
@@ -58,7 +60,7 @@ class SocketMap : ISocketMap {
             mutex.Release();
         }
 
-        Console.WriteLine($"reset all connections");
+        await Log.Write($"reset all connections");
     }
 
     public async Task<SocketSnapshot> Snapshot() {
@@ -70,6 +72,16 @@ class SocketMap : ISocketMap {
             lastSnapLifetime = new Lifetime();
 
             return new SocketSnapshot(sockMap.ToImmutableDictionary(), lastSnapLifetime);
+        } finally {
+            mutex.Release();
+        }
+    }
+
+    public async Task Detach(SocketSnapshot snap) {
+        await mutex.WaitAsync();
+        try {
+            if (ReferenceEquals(snap.Lifetime, lastSnapLifetime))
+                lastSnapLifetime = null;
         } finally {
             mutex.Release();
         }
@@ -101,7 +113,7 @@ class SocketMap : ISocketMap {
             mutex.Release();
         }
 
-        Console.WriteLine($"added connection {id}");
+        await Log.Write($"added connection {id}");
     }
 
     public void Dispose() {
@@ -151,6 +163,10 @@ class AutoconnectSocketMap : ISocketMap {
         return await sockMap.Snapshot();
     }
 
+    public async Task Detach(SocketSnapshot snap) {
+        await sockMap.Detach(snap);
+    }
+
     public void Dispose() {
         sockMap.Dispose();
     }
@@ -162,9 +178,11 @@ class AutoconnectSocketMap : ISocketMap {
             using var conTimeout = Timeouts.ConnectTimeout();
             await s.ConnectAsync(endPoint, conTimeout.Token);
         } catch (Exception e) {
+            await Log.Warn($"could not connect to {endPoint}", e);
+            throw;
         }
 
-        Console.WriteLine($"connected new socket to {endPoint}");
+        await Log.Write($"connected new socket to {endPoint}");
 
         return s;
     }

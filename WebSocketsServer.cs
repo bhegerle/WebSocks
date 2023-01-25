@@ -22,23 +22,23 @@ internal class WebSocketsServer {
     private Uri TunnelUri => config.TunnelUri;
 
     internal async Task Start(CancellationToken token) {
-        Console.WriteLine($"tunneling {config.ListenUri} -> {TunnelUri}");
+        await Log.Write($"tunneling {config.ListenUri} -> {TunnelUri}");
         await app.StartAsync();
 
         try {
             await Task.Delay(Timeout.Infinite, token);
         } finally {
-            Console.WriteLine("cancelling ws tasks");
+            await Log.Write("cancelling ws tasks");
             await app.StopAsync();
         }
     }
 
     private async Task Handler(HttpContext ctx, RequestDelegate next) {
-        Console.WriteLine($"request from {ctx.GetEndpoint()}");
+        await Log.Write($"request from {ctx.GetEndpoint()}");
 
         if (ctx.WebSockets.IsWebSocketRequest) {
             var ws = await ctx.WebSockets.AcceptWebSocketAsync();
-            Console.WriteLine("accepted WebSocket");
+            await Log.Write("accepted WebSocket");
 
             var wsSrc = new SingletonWebSocketSource(ws);
             var channelCon = new ChannelConnector(ProtocolByte.WsListener, config, wsSrc);
@@ -48,7 +48,7 @@ internal class WebSocketsServer {
 
             await multiplexer.Multiplex(ctx.RequestAborted);
         } else {
-            Console.WriteLine("not WebSocket");
+            await Log.Warn("not WebSocket");
             ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
         }
     }

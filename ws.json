@@ -1,5 +1,6 @@
 ﻿{
   "ListenOn": "ws://0.0.0.0:8008/",
   "TunnelTo": "tcp://127.0.0.1:5217/",
-  "Key": "foo1"
+  "Key": "foo1",
+  "Verbose": true
 }

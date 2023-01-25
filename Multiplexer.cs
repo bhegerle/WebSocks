@@ -25,8 +25,7 @@ namespace WebStunnel {
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (Exception e) {
-                    Console.WriteLine("could not connect channel");
-                    Console.WriteLine($"{e.GetType()}: {e.Message}");
+                    await Log.Warn("could not connect channel", e);
                     continue;
                 }
 
@@ -43,8 +42,6 @@ namespace WebStunnel {
                     await Task.WhenAll(trecv, srecv);
                 } catch (OperationCanceledException) {
                     throw;
-                } catch {
-                    // shouldn't happen
                 }
 
                 await sockMap.Reset();
@@ -70,8 +67,7 @@ namespace WebStunnel {
                     await sock.Send(f.Message, sendTimeout.Token);
                 }
             } catch (Exception e) {
-                Console.WriteLine("ws receive loop terminated");
-                Console.WriteLine(e);
+                await Log.Write("ws receive loop terminated", e);
                 throw;
             }
         }
@@ -83,23 +79,26 @@ namespace WebStunnel {
                 while (true) {
                     using var snap = await sockMap.Snapshot();
 
-                    var newInSnap = snap.Sockets.Keys.Except(taskMap.Keys);
-                    foreach (var sid in newInSnap) {
-                        taskMap.Add(sid, SocketReceiveLoop(sid, snap.Sockets[sid]));
-                    }
+                    try {
+                        var newInSnap = snap.Sockets.Keys.Except(taskMap.Keys);
+                        foreach (var sid in newInSnap) {
+                            taskMap.Add(sid, SocketReceiveLoop(sid, snap.Sockets[sid]));
+                        }
 
-                    var dropFromSnap = taskMap.Keys.Except(snap.Sockets.Keys);
-                    foreach (var tid in dropFromSnap) {
-                        var t = taskMap[tid];
-                        if (await t.DidCompleteWithin(TimeSpan.FromMilliseconds(1)))
-                            taskMap.Remove(tid);
-                    }
+                        var dropFromSnap = taskMap.Keys.Except(snap.Sockets.Keys);
+                        foreach (var tid in dropFromSnap) {
+                            var t = taskMap[tid];
+                            if (await t.DidCompleteWithin(TimeSpan.FromMilliseconds(1)))
+                                taskMap.Remove(tid);
+                        }
 
-                    await snap.Lifetime.WhileAlive(token);
+                        await snap.Lifetime.WhileAlive(token);
+                    } finally {
+                        await sockMap.Detach(snap);
+                    }
                 }
             } catch (Exception e) {
-                Console.WriteLine("socket map loop terminated");
-                Console.WriteLine(e);
+                await Log.Write("socket map loop terminated", e);
                 throw;
             }
         }

@@ -31,25 +31,22 @@ internal class TcpServer {
             listener.Bind(config.ListenUri.EndPoint());
             listener.Listen();
 
-            Console.WriteLine($"listening on {listener.LocalEndPoint}");
+            await Log.Write($"listening on {listener.LocalEndPoint}");
 
             while (true) {
                 var s = await listener.AcceptAsync(token);
                 var id = new SocketId();
 
-                Console.WriteLine($"accepted connection {id} from {s.RemoteEndPoint}");
+                await Log.Write($"accepted connection {id} from {s.RemoteEndPoint}");
 
                 await sockMap.AddSocket(id, s);
             }
         } catch (OperationCanceledException) {
-            Console.WriteLine("cancelled socket accept");
+            await Log.Write("cancelled socket accept");
             throw;
         } catch (Exception e) {
-            Console.WriteLine("unexpected socket accept exception");
-            Console.WriteLine(e);
+            await Log.Warn("unexpected socket accept exception", e);
             throw;
-        } finally {
-            Console.WriteLine("done accepting");
         }
     }
 
@@ -61,14 +58,11 @@ internal class TcpServer {
 
             await multiplexer.Multiplex(token);
         } catch (OperationCanceledException) {
-            Console.WriteLine("cancelled multiplexing");
+            await Log.Write("cancelled multiplexing");
             throw;
         } catch (Exception e) {
-            Console.WriteLine("unexpected multiplexing exception");
-            Console.WriteLine(e);
+            await Log.Warn("unexpected multiplexing exception", e);
             throw;
-        } finally {
-            Console.WriteLine("done multiplexing");
         }
     }
 }

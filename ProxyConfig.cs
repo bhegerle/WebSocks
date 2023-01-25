@@ -26,12 +26,12 @@ public record ProxyConfig {
             var proxyUri = WebRequest.GetSystemWebProxy().GetProxy(uri);
 
             if (proxyUri != null) {
-                Console.WriteLine($"connecting to {uri} through WebProxy {proxyUri}");
+                Log.Write($"connecting to {uri} through WebProxy {proxyUri}").RunSynchronously();
                 return new WebProxy(proxyUri) { UseDefaultCredentials = true };
             }
         } else if (HttpProxy != null) {
             var proxyUri = new Uri(HttpProxy);
-            Console.WriteLine($"connecting through WebProxy {proxyUri}");
+            Log.Write($"connecting through WebProxy {proxyUri}").RunSynchronously();
             return new WebProxy(proxyUri);
         }
 

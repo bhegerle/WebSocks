@@ -18,6 +18,7 @@ internal sealed record SocketId {
     }
 
     internal static int Size => sizeof(uint);
+
     internal uint Value { get; }
 
     internal ArraySegment<byte> GetSegment() {

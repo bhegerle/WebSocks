@@ -4,8 +4,7 @@ if (args.Length == 0)
     throw new Exception("usage: websocks.exe {config path}");
 
 var config = await Config.Load(args[0]);
-if (config.LogPath != null)
-    await Log.SetLogPath(config.LogPath);
+await Log.Configure(config);
 
 using var cts = new CancellationTokenSource();
 

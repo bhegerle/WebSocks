@@ -38,7 +38,7 @@ internal class AutoconnectWebSocketSource : IWebSocketSource {
             throw new Exception("failed to configure ws proxy settings", e);
         }
 
-        Console.WriteLine($"connecting to {tunnelUri}");
+        await Log.Write($"connecting to {tunnelUri}");
 
         try {
             await ws.ConnectAsync(tunnelUri, token);
