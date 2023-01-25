@@ -1,28 +1,36 @@
 ﻿namespace WebStunnel;
 
 internal static class Timeouts {
+    private static TimeSpan sendTimeout, connectTimeout, idleTimeout;
+
+    internal static void Configure(Config config) {
+        sendTimeout = config.SendTimeout;
+        connectTimeout = config.ConnectTimeout;
+        idleTimeout = config.IdleTimeout;
+    }
+
     internal static CancellationTokenSource SendTimeout() {
-        return Timeout(Config.SendTimeout);
+        return Timeout(sendTimeout);
     }
 
     internal static CancellationTokenSource ConnectTimeout() {
-        return Timeout(Config.ConnectTimeout);
+        return Timeout(connectTimeout);
     }
 
     internal static CancellationTokenSource IdleTimeout() {
-        return Timeout(Config.IdleTimeout);
+        return Timeout(idleTimeout);
     }
 
     internal static CancellationTokenSource SendTimeout(CancellationToken token) {
-        return Timeout(token, Config.SendTimeout);
+        return Timeout(token, sendTimeout);
     }
 
     internal static CancellationTokenSource ConnectTimeout(CancellationToken token) {
-        return Timeout(token, Config.ConnectTimeout);
+        return Timeout(token, connectTimeout);
     }
 
     internal static CancellationTokenSource IdleTimeout(CancellationToken token) {
-        return Timeout(token, Config.IdleTimeout);
+        return Timeout(token, idleTimeout);
     }
 
     private static CancellationTokenSource Timeout(TimeSpan timeout) {

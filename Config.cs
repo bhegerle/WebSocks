@@ -4,20 +4,18 @@ using System.Text.Json.Serialization;
 namespace WebStunnel;
 
 public record Config {
-    public string ListenOn { get; init; }
-    public string TunnelTo { get; init; }
+    public Uri ListenUri { get; init; }
+    public Uri TunnelUri { get; init; }
     public ProxyConfig Proxy { get; init; } = new() { UseSystemProxy = true };
     public string Key { get; init; }
     public string LogPath { get; init; }
     public bool Verbose { get; init; }
+    public Uri Foo { get; init; }
 
-    internal Uri ListenUri => new(ListenOn);
-    internal Uri TunnelUri => new(TunnelTo);
-
-    internal static TimeSpan SendTimeout => TimeSpan.FromSeconds(20);
-    internal static TimeSpan IdleTimeout => TimeSpan.FromMinutes(1);
-    internal static TimeSpan ReconnectDelay => TimeSpan.FromSeconds(7);
-    internal static TimeSpan ConnectTimeout => TimeSpan.FromSeconds(2);
+    public TimeSpan SendTimeout { get; init; } = TimeSpan.FromSeconds(1);
+    public TimeSpan IdleTimeout { get; init; } = TimeSpan.FromMinutes(10);
+    public TimeSpan ReconnectDelay { get; init; } = TimeSpan.FromSeconds(30);
+    public TimeSpan ConnectTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
     internal static async Task<Config> Load(string path) {
         await using var file = new FileStream(path, FileMode.Open, FileAccess.Read);

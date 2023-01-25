@@ -1,7 +1,10 @@
-﻿namespace WebStunnel;
+﻿using System.Net.WebSockets;
+using System.Threading.Channels;
+
+namespace WebStunnel;
 
 internal class ChannelConnectionException : Exception {
-    internal ChannelConnectionException(Exception e) 
+    internal ChannelConnectionException(Exception e)
         : base("could not connect channel", e) { }
 }
 
@@ -16,18 +19,24 @@ internal class ChannelConnector {
         this.wsSrc = wsSrc;
     }
 
-    public async Task<Channel> Connect(CancellationToken token) {
+    internal async Task<Channel> Connect(CancellationToken token, bool isReconnect) {
+        if (isReconnect)
+            await Task.Delay(config.ReconnectDelay, token);
+
+        WebSocket ws = null;
         Channel c = null;
 
         try {
-            var ws = await wsSrc.GetWebSocket(token);
+            ws = await wsSrc.GetWebSocket(token);
             if (ws == null)
                 return null;
 
             c = new Channel(ws, new Codec(protoByte, config));
+
             await c.HandshakeCheck(token);
             return c;
         } catch (Exception e) {
+            ws.Dispose();
             c?.Dispose();
             throw new ChannelConnectionException(e);
         }

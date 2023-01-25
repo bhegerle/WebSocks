@@ -1,100 +1,100 @@
 ﻿using System.Net.WebSockets;
 
-namespace WebStunnel {
-    internal class Channel : IDisposable {
-        private readonly WebSocket ws;
-        private readonly Codec codec;
-        private readonly SemaphoreSlim mutex;
+namespace WebStunnel; 
 
-        internal Channel(WebSocket ws, Codec codec) {
-            this.ws = ws;
-            this.codec = codec;
+internal class Channel : IDisposable {
+    private readonly WebSocket ws;
+    private readonly Codec codec;
+    private readonly SemaphoreSlim mutex;
 
-            mutex = new SemaphoreSlim(1);
-        }
+    internal Channel(WebSocket ws, Codec codec) {
+        this.ws = ws;
+        this.codec = codec;
 
-        public void Dispose() {
-            ws?.Dispose();
-        }
+        mutex = new SemaphoreSlim(1);
+    }
 
-        internal async Task HandshakeCheck(CancellationToken token) {
-            await mutex.WaitAsync(token);
-            try {
-                if (codec.State == CodecState.Init) {
-                    await Log.Write("    init handshake");
+    public void Dispose() {
+        ws?.Dispose();
+    }
 
-                    var seg = new byte[Codec.InitMessageSize];
-                    var sendSeg = codec.InitHandshake(seg);
-                    await WsSend(sendSeg, token);
+    internal async Task HandshakeCheck(CancellationToken token) {
+        await mutex.WaitAsync(token);
+        try {
+            if (codec.State == CodecState.Init) {
+                await Log.Write("    init handshake");
 
-                    var recvSeg = await WsRecv(seg, token);
-                    codec.VerifyHandshake(recvSeg);
+                var seg = new byte[Codec.InitMessageSize];
+                var sendSeg = codec.InitHandshake(seg);
+                await WsSend(sendSeg, token);
 
-                    await Log.Write("    completed handshake");
-                }
-            } catch (Exception ex) {
-                await Log.Warn("handshake failed", ex);
-                throw;
-            } finally {
-                mutex.Release();
+                var recvSeg = await WsRecv(seg, token);
+                codec.VerifyHandshake(recvSeg);
+
+                await Log.Write("    completed handshake");
             }
+        } catch (Exception ex) {
+            await Log.Warn("handshake failed", ex);
+            throw;
+        } finally {
+            mutex.Release();
+        }
+    }
+
+    internal async Task Send(ArraySegment<byte> seg, CancellationToken token) {
+        var n = seg.Count;
+
+        await mutex.WaitAsync(token);
+        try {
+            seg = codec.AuthMessage(seg);
+        } finally {
+            mutex.Release();
         }
 
-        internal async Task Send(ArraySegment<byte> seg, CancellationToken token) {
-            var n = seg.Count;
+        await WsSend(seg, token);
+    }
 
-            await mutex.WaitAsync(token);
-            try {
-                seg = codec.AuthMessage(seg);
-            } finally {
-                mutex.Release();
-            }
+    internal async Task<ArraySegment<byte>> Receive(ArraySegment<byte> seg, CancellationToken token) {
+        seg = await WsRecv(seg, token);
 
-            await WsSend(seg, token);
+        var n = seg.Count;
+
+        await mutex.WaitAsync(token);
+        try {
+            seg = codec.VerifyMessage(seg);
+        } finally {
+            mutex.Release();
         }
 
-        internal async Task<ArraySegment<byte>> Receive(ArraySegment<byte> seg, CancellationToken token) {
-            seg = await WsRecv(seg, token);
+        return seg;
+    }
 
-            var n = seg.Count;
+    private async Task<ArraySegment<byte>> WsRecv(ArraySegment<byte> seg, CancellationToken token) {
+        var init = seg;
+        var n = 0;
 
-            await mutex.WaitAsync(token);
-            try {
-                seg = codec.VerifyMessage(seg);
-            } finally {
-                mutex.Release();
-            }
+        while (seg.Count > 0) {
+            var recv = await ws.ReceiveAsync(seg, token);
+            if (recv.MessageType != WebSocketMessageType.Binary)
+                throw new Exception("non-binary message received");
+            
+            n += recv.Count;
+            seg = seg[recv.Count..];
 
-            return seg;
-        }
-
-        private async Task<ArraySegment<byte>> WsRecv(ArraySegment<byte> seg, CancellationToken token) {
-            var init = seg;
-            var n = 0;
-
-            while (seg.Count > 0) {
-                var recv = await ws.ReceiveAsync(seg, token);
-                if (recv.MessageType != WebSocketMessageType.Binary)
-                    throw new Exception("non-binary message received");
-                
-                n += recv.Count;
-                seg = seg[recv.Count..];
-
-                if (recv.EndOfMessage) {
-                    return init[..n];
-                }
-
-                await Log.Write($"ws partial: buffered {recv.Count} bytes");
+            if (recv.EndOfMessage) {
+                return init[..n];
             }
 
-            throw new Exception("message exceeds segment");
+            await Log.Write($"ws partial: buffered {recv.Count} bytes");
         }
 
-        private async Task WsSend(ArraySegment<byte> seg, CancellationToken token) {
-            await ws.SendAsync(seg,
-                WebSocketMessageType.Binary,
-                WebSocketMessageFlags.EndOfMessage | WebSocketMessageFlags.DisableCompression,
-                token);
-        }
+        throw new Exception("message exceeds segment");
+    }
+
+    private async Task WsSend(ArraySegment<byte> seg, CancellationToken token) {
+        await ws.SendAsync(seg,
+            WebSocketMessageType.Binary,
+            WebSocketMessageFlags.EndOfMessage | WebSocketMessageFlags.DisableCompression,
+            token);
     }
 }

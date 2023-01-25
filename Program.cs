@@ -5,6 +5,7 @@ if (args.Length == 0)
 
 var config = await Config.Load(args[0]);
 await Log.Configure(config);
+Timeouts.Configure(config);
 
 using var cts = new CancellationTokenSource();
 
