@@ -42,25 +42,6 @@ internal static class Utils {
         return new ArraySegment<byte>(x.Array, x.Offset, x.Count + extensionCount);
     }
 
-#warning this is suspect
-    internal static CancellationToken TimeoutToken(bool longTimout = true) {
-        var cts = new CancellationTokenSource();
-        cts.CancelAfter(TimeSpan.FromMilliseconds(longTimout ? 2000 : 100));
-        return cts.Token;
-    }
-
-    internal static CancellationToken IdleTimeout() {
-        var cts = new CancellationTokenSource();
-        cts.CancelAfter(Config.IdleTimeout);
-        return cts.Token;
-    }
-
-    internal static CancellationToken TimeoutToken() {
-        var cts = new CancellationTokenSource();
-        cts.CancelAfter(Config.Timeout);
-        return cts.Token;
-    }
-
     internal static async Task UntilCancelled(this Task t, CancellationToken token) {
         var delay = Task.Delay(Timeout.Infinite, token);
         await Task.WhenAny(t, delay);
@@ -84,35 +65,5 @@ internal static class Utils {
     internal static async Task<ArraySegment<byte>> Receive(this Socket s, ArraySegment<byte> seg, CancellationToken token) {
         var n = await s.ReceiveAsync(seg, SocketFlags.None, token);
         return seg[..n];
-    }
-
-    internal static void ForceClose(this Socket s) {
-        try {
-            if (s.Connected) s.Close(100);
-        } catch {
-            // ignored
-        }
-    }
-
-    internal static async Task ForceCloseAsync(this WebSocket ws) {
-        try {
-            if (ws.State != WebSocketState.Closed)
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, TimeoutToken(false));
-        } catch {
-            // ignored
-        }
-    }
-
-    internal static void SetLogPath(string path) {
-        path = Path.GetFullPath(path);
-
-        Console.WriteLine($"logging to {path}");
-
-        var dir = Path.GetDirectoryName(path);
-        if (dir != null)
-            Directory.CreateDirectory(dir);
-
-        var w = new StreamWriter(path) { AutoFlush = true };
-        Console.SetOut(w);
     }
 }

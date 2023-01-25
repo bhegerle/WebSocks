@@ -31,10 +31,20 @@ internal class AutoconnectWebSocketSource : IWebSocketSource {
 
     public async Task<WebSocket> GetWebSocket(CancellationToken token) {
         var ws = new ClientWebSocket();
-        proxyConfig.Configure(ws, tunnelUri);
+
+        try {
+            proxyConfig.Configure(ws, tunnelUri);
+        } catch (Exception e) {
+            throw new Exception("failed to configure ws proxy settings", e);
+        }
 
         Console.WriteLine($"connecting to {tunnelUri}");
-        await ws.ConnectAsync(tunnelUri, token);
+
+        try {
+            await ws.ConnectAsync(tunnelUri, token);
+        } catch (Exception e) {
+            throw new Exception($"could not connect to {tunnelUri}", e);
+        }
 
         return ws;
     }

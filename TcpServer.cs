@@ -35,7 +35,7 @@ internal class TcpServer {
 
             while (true) {
                 var s = await listener.AcceptAsync(token);
-                var id = GetId(rng);
+                var id = new SocketId();
 
                 Console.WriteLine($"accepted connection {id} from {s.RemoteEndPoint}");
 
@@ -70,11 +70,5 @@ internal class TcpServer {
         } finally {
             Console.WriteLine("done multiplexing");
         }
-    }
-
-    private static ulong GetId(RandomNumberGenerator rng) {
-        var b = new byte[sizeof(ulong)];
-        rng.GetNonZeroBytes(b);
-        return BitConverter.ToUInt64(b);
     }
 }

@@ -4,34 +4,34 @@ using System.Net.Sockets;
 
 namespace WebStunnel;
 
-internal record SocketSnapshot(ImmutableDictionary<ulong, Socket> Sockets, Lifetime Lifetime) : IDisposable {
+internal record SocketSnapshot(ImmutableDictionary<SocketId, Socket> Sockets, Lifetime Lifetime) : IDisposable {
     public void Dispose() {
         Lifetime.Dispose();
     }
 }
 
 internal interface ISocketMap {
-    Task<Socket> GetSocket(ulong id);
-    Task RemoveSocket(ulong id);
+    Task<Socket> GetSocket(SocketId id);
+    Task RemoveSocket(SocketId id);
     Task Reset();
     Task<SocketSnapshot> Snapshot();
 }
 
 class SocketMap : ISocketMap {
     private readonly SemaphoreSlim mutex;
-    private readonly Dictionary<ulong, Socket> sockMap;
+    private readonly Dictionary<SocketId, Socket> sockMap;
     private Lifetime lastSnapLifetime; // owned by that Snapshot
 
     internal SocketMap() {
         mutex = new SemaphoreSlim(1);
-        sockMap = new Dictionary<ulong, Socket>();
+        sockMap = new Dictionary<SocketId, Socket>();
     }
 
-    public async Task<Socket> GetSocket(ulong id) {
+    public async Task<Socket> GetSocket(SocketId id) {
         return await GetSocket(id, true);
     }
 
-    public async Task RemoveSocket(ulong id) {
+    public async Task RemoveSocket(SocketId id) {
         await mutex.WaitAsync();
         try {
             if (sockMap.TryGetValue(id, out var s)) {
@@ -75,7 +75,7 @@ class SocketMap : ISocketMap {
         }
     }
 
-    internal async Task<Socket> GetSocket(ulong id, bool required) {
+    internal async Task<Socket> GetSocket(SocketId id, bool required) {
         await mutex.WaitAsync();
         try {
             if (sockMap.TryGetValue(id, out var s))
@@ -89,12 +89,12 @@ class SocketMap : ISocketMap {
         }
     }
 
-    internal async Task AddSocket(ulong id, Socket s) {
-        if (id == 0)
-            throw new Exception("nonzero id required");
-
+    internal async Task AddSocket(SocketId id, Socket s) {
         await mutex.WaitAsync();
         try {
+            if (sockMap.ContainsKey(id))
+                throw new Exception($"socket {id} already mapped");
+
             sockMap.Add(id, s);
             ReplaceSnapshot();
         } finally {
@@ -121,67 +121,48 @@ class SocketMap : ISocketMap {
 
 class AutoconnectSocketMap : ISocketMap {
     private readonly IPEndPoint endPoint;
-    private readonly SemaphoreSlim mutex;
     private readonly SocketMap sockMap;
 
     internal AutoconnectSocketMap(IPEndPoint endPoint) {
         this.endPoint = endPoint;
-        mutex = new SemaphoreSlim(1);
         sockMap = new SocketMap();
     }
 
-    public async Task<Socket> GetSocket(ulong id) {
-        await mutex.WaitAsync();
-        try {
-            var s = await sockMap.GetSocket(id, false);
-            if (s == null) {
-                s = await Connect();
-                await sockMap.AddSocket(id, s);
-            }
+    public async Task<Socket> GetSocket(SocketId id) {
+        var s = await sockMap.GetSocket(id, false);
 
-            return s;
-        } finally {
-            mutex.Release();
+        if (s == null) {
+            s = await Connect();
+            await sockMap.AddSocket(id, s);
         }
+
+        return s;
     }
 
-    public async Task RemoveSocket(ulong id) {
-        await mutex.WaitAsync();
-        try {
-            await sockMap.RemoveSocket(id);
-        } finally {
-            mutex.Release();
-        }
+    public async Task RemoveSocket(SocketId id) {
+        await sockMap.RemoveSocket(id);
     }
 
     public async Task Reset() {
-        await mutex.WaitAsync();
-        try {
-            await sockMap.Reset();
-        } finally {
-            mutex.Release();
-        }
+        await sockMap.Reset();
     }
 
     public async Task<SocketSnapshot> Snapshot() {
-        await mutex.WaitAsync();
-        try {
-            return await sockMap.Snapshot();
-        } finally {
-            mutex.Release();
-        }
+        return await sockMap.Snapshot();
     }
 
     public void Dispose() {
         sockMap.Dispose();
-        mutex.Dispose();
     }
 
     private async Task<Socket> Connect() {
         var s = new Socket(SocketType.Stream, ProtocolType.Tcp);
 
-        using var conTimeout = Timeouts.ConnectTimeout();
-        await s.ConnectAsync(endPoint, conTimeout.Token);
+        try {
+            using var conTimeout = Timeouts.ConnectTimeout();
+            await s.ConnectAsync(endPoint, conTimeout.Token);
+        } catch (Exception e) {
+        }
 
         Console.WriteLine($"connected new socket to {endPoint}");
 

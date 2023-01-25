@@ -38,6 +38,7 @@ namespace WebStunnel {
                     var srecv = SocketMapLoop(linkedCts.Token);
 
                     await Task.WhenAny(trecv, srecv);
+                    await Task.Delay(1000);
                     loopCts.Cancel();
                     await Task.WhenAll(trecv, srecv);
                 } catch (OperationCanceledException) {
@@ -53,7 +54,7 @@ namespace WebStunnel {
         private async Task ChannelReceiveLoop(CancellationToken token) {
             try {
                 var seg = NewSeg();
-                var idBuf = new byte[sizeof(ulong)].AsSegment();
+                var idBuf = new byte[SocketId.Size].AsSegment();
 
                 while (true) {
                     using var recvTimeout = IdleTimeout();
@@ -62,21 +63,22 @@ namespace WebStunnel {
                     var msg = await channel.Receive(seg, token);
 
                     var f = new Frame(msg, idBuf.Count, false);
-                    var id = BitConverter.ToUInt64(f.Suffix);
+                    var id = new SocketId(f.Suffix);
                     var sock = await sockMap.GetSocket(id);
 
                     using var sendTimeout = SendTimeout();
                     await sock.Send(f.Message, sendTimeout.Token);
                 }
-            } catch {
+            } catch (Exception e) {
                 Console.WriteLine("ws receive loop terminated");
+                Console.WriteLine(e);
                 throw;
             }
         }
 
         private async Task SocketMapLoop(CancellationToken token) {
             try {
-                var taskMap = new Dictionary<ulong, Task>();
+                var taskMap = new Dictionary<SocketId, Task>();
 
                 while (true) {
                     using var snap = await sockMap.Snapshot();
@@ -95,20 +97,24 @@ namespace WebStunnel {
 
                     await snap.Lifetime.WhileAlive(token);
                 }
-            } catch {
+            } catch (Exception e) {
                 Console.WriteLine("socket map loop terminated");
+                Console.WriteLine(e);
                 throw;
             }
         }
 
-        private async Task SocketReceiveLoop(ulong id, Socket s) {
+        private async Task SocketReceiveLoop(SocketId id, Socket s) {
             var seg = NewSeg();
-            var idBuf = BitConverter.GetBytes(id).AsSegment();
+            var idBuf = id.GetSegment();
 
             try {
                 while (true) {
                     using var recvTimeout = IdleTimeout();
                     var msg = await s.Receive(seg, recvTimeout.Token);
+
+                    if (msg.Count == 0)
+                        break;
 
                     var f = new Frame(msg, idBuf.Count, true);
                     idBuf.CopyTo(f.Suffix);

@@ -5,7 +5,7 @@ if (args.Length == 0)
 
 var config = await Config.Load(args[0]);
 if (config.LogPath != null)
-    Utils.SetLogPath(config.LogPath);
+    await Log.SetLogPath(config.LogPath);
 
 using var cts = new CancellationTokenSource();
 
@@ -18,11 +18,14 @@ if (config.ListenUri.Scheme == "tcp") {
     ioTask = srv.Start(cts.Token);
 }
 
-await ConsoleInterface.Run();
+var conTask = Control.RunUntilCancelled(cts);
 
-Console.WriteLine("cancelling io tasks");
-cts.Cancel();
+try {
+    await Task.WhenAll(conTask, ioTask);
+} catch (OperationCanceledException) {
+    // ignored
+} catch (Exception ex) {
+    await Log.Error("unhandled exception", ex);
+}
 
-await Task.WhenAny(ioTask);
-
-Console.WriteLine("bye");
+await Log.Write("bye");
