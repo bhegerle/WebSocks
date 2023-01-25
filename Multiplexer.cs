@@ -1,5 +1,5 @@
-﻿using System.Net.Sockets;
-using System.Net.WebSockets;
+﻿using System.Diagnostics.Eventing.Reader;
+using System.Net.Sockets;
 
 namespace WebStunnel;
 
@@ -18,14 +18,13 @@ internal class Multiplexer {
     internal async Task Multiplex(CancellationToken token) {
         while (true) {
             try {
-                using var conTimeout = ConnectTimeout(token);
-                var isReconnect = channel != null;
-                channel = await channelCon.Connect(conTimeout.Token, isReconnect);
-                if (channel == null)
-                    return;
+                var c = await Connect(token);
+                if (c != null)
+                    channel = c;
+                else
+                    break;
 
                 using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-
                 var trecv = ChannelReceiveLoop(loopCts.Token);
                 var srecv = SocketMapLoop(loopCts.Token);
 
@@ -35,69 +34,65 @@ internal class Multiplexer {
             } catch (ChannelConnectionException e) {
                 await Log.Warn(e.Message, e.InnerException);
             } catch (OperationCanceledException) {
-                await Log.Write("done multiplexing");
-                throw;
+                await Log.Write("multiplexing operation cancelled");
             } catch (Exception e) {
-                await Log.Error("unexpected exception while multiplexing", e);
-                throw;
+                await Log.Error("other exception while multiplexing", e);
             } finally {
                 await sockMap.Reset();
             }
+
+            token.ThrowIfCancellationRequested();
         }
     }
 
+    private async Task<Channel> Connect(CancellationToken token) {
+        return await channelCon.Connect(token);
+    }
+
     private async Task ChannelReceiveLoop(CancellationToken token) {
-        try {
-            var seg = NewSeg();
-            var idBuf = new byte[SocketId.Size].AsSegment();
+        var seg = NewSeg();
+        var idBuf = new byte[SocketId.Size].AsSegment();
 
-            while (true) {
-                using var recvTimeout = IdleTimeout(token);
-                var msg = await channel.Receive(seg, recvTimeout.Token);
+        while (true) {
+            using var recvTimeout = IdleTimeout(token);
+            var msg = await channel.Receive(seg, recvTimeout.Token);
 
-                var f = new Frame(msg, idBuf.Count, false);
-                var id = new SocketId(f.Suffix);
-                var sock = await sockMap.GetSocket(id, token);
+            var f = new Frame(msg, idBuf.Count, false);
+            var id = new SocketId(f.Suffix);
+            var sock = await sockMap.GetSocket(id, token);
 
-                if (f.Message.Count > 0) {
-                    using var sendTimeout = SendTimeout(token);
-                    await sock.Send(f.Message, sendTimeout.Token);
-                } else {
-                    await sockMap.RemoveSocket(id);
-                }
+            if (f.Message.Count > 0) {
+                using var sendTimeout = SendTimeout(token);
+                await sock.Send(f.Message, sendTimeout.Token);
+            } else {
+                await sockMap.RemoveSocket(id);
             }
-        } catch (Exception e) {
-            await Log.Write("ws receive loop terminated", e);
         }
     }
 
     private async Task SocketMapLoop(CancellationToken token) {
-        try {
-            var taskMap = new Dictionary<SocketId, Task>();
+        var taskMap = new Dictionary<SocketId, Task>();
 
-            while (true) {
-                using var snap = await sockMap.Snapshot();
+        while (true) {
+            using var snap = await sockMap.Snapshot();
 
-                try {
-                    var newInSnap = snap.Sockets.Keys.Except(taskMap.Keys);
-                    foreach (var sid in newInSnap) {
-                        taskMap.Add(sid, SocketReceiveLoop(sid, snap.Sockets[sid]));
-                    }
-
-                    var dropFromSnap = taskMap.Keys.Except(snap.Sockets.Keys);
-                    foreach (var tid in dropFromSnap) {
-                        var t = taskMap[tid];
-                        if (await t.DidCompleteWithin(TimeSpan.FromMilliseconds(1)))
-                            taskMap.Remove(tid);
-                    }
-
-                    await snap.Lifetime.WhileAlive(token);
-                } finally {
-                    await sockMap.Detach(snap);
+            try {
+                var newInSnap = snap.Sockets.Keys.Except(taskMap.Keys);
+                foreach (var sid in newInSnap) {
+                    taskMap.Add(sid, SocketReceiveLoop(sid, snap.Sockets[sid]));
                 }
+
+                var dropFromSnap = taskMap.Keys.Except(snap.Sockets.Keys);
+                foreach (var tid in dropFromSnap) {
+                    var t = taskMap[tid];
+                    if (await t.DidCompleteWithin(TimeSpan.FromMilliseconds(1)))
+                        taskMap.Remove(tid);
+                }
+
+                await snap.Lifetime.WhileAlive(token);
+            } finally {
+                await sockMap.Detach(snap);
             }
-        } catch (Exception e) {
-            await Log.Write("socket map loop terminated", e);
         }
     }
 
