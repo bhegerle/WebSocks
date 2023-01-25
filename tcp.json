@@ -2,5 +2,5 @@
   "ListenOn": "tcp://127.0.0.1:7777/",
   "TunnelTo": "ws://127.0.0.1:8008/",
   "Key": "foo1",
-  "Verbose":  true
+  "Verbose":  false
 }

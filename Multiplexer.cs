@@ -37,7 +37,6 @@ namespace WebStunnel {
                     var srecv = SocketMapLoop(linkedCts.Token);
 
                     await Task.WhenAny(trecv, srecv);
-                    await Task.Delay(1000);
                     loopCts.Cancel();
                     await Task.WhenAll(trecv, srecv);
                 } catch (OperationCanceledException) {
@@ -63,12 +62,15 @@ namespace WebStunnel {
                     var id = new SocketId(f.Suffix);
                     var sock = await sockMap.GetSocket(id);
 
-                    using var sendTimeout = SendTimeout();
-                    await sock.Send(f.Message, sendTimeout.Token);
+                    if (f.Message.Count > 0) {
+                        using var sendTimeout = SendTimeout();
+                        await sock.Send(f.Message, sendTimeout.Token);
+                    } else {
+                        await sockMap.RemoveSocket(id);
+                    }
                 }
             } catch (Exception e) {
                 await Log.Write("ws receive loop terminated", e);
-                throw;
             }
         }
 
@@ -99,7 +101,6 @@ namespace WebStunnel {
                 }
             } catch (Exception e) {
                 await Log.Write("socket map loop terminated", e);
-                throw;
             }
         }
 
@@ -112,16 +113,16 @@ namespace WebStunnel {
                     using var recvTimeout = IdleTimeout();
                     var msg = await s.Receive(seg, recvTimeout.Token);
 
-                    if (msg.Count == 0)
-                        break;
-
                     var f = new Frame(msg, idBuf.Count, true);
                     idBuf.CopyTo(f.Suffix);
 
                     using var sendTimeout = SendTimeout();
                     await channel.Send(f.Complete, sendTimeout.Token);
+
+                    if (msg.Count == 0)
+                        break;
                 }
-            } catch {
+            } finally {
                 await sockMap.RemoveSocket(id);
             }
         }

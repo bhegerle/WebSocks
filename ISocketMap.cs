@@ -39,6 +39,8 @@ class SocketMap : ISocketMap {
             if (sockMap.TryGetValue(id, out var s)) {
                 s.Dispose();
                 sockMap.Remove(id);
+            } else {
+                return;
             }
 
             ReplaceSnapshot();

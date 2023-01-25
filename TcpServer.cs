@@ -18,6 +18,8 @@ internal class TcpServer {
     }
 
     internal async Task Start(CancellationToken token) {
+        await Log.Write($"tunneling {config.ListenUri} -> {config.TunnelUri}");
+
         var at = AcceptLoop(token);
         var tt = Multiplex(token);
         await Task.WhenAll(at, tt);
