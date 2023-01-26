@@ -17,24 +17,23 @@ internal static class Log {
     }
 
     internal static async Task Configure(Config config) {
+        var path = config.LogPath;
+        if (path != null) {
+            path = Path.GetFullPath(path);
+
+            await Write($"logging to {path}");
+
+            var dir = Path.GetDirectoryName(path);
+            if (dir != null)
+                Directory.CreateDirectory(dir);
+        }
+
         await mutex.WaitAsync();
         try {
             verbose = config.Verbose;
 
-            var path = config.LogPath;
             if (path != null) {
-
-                path = Path.GetFullPath(path);
-
-                await Write($"logging to {path}");
-
-                var dir = Path.GetDirectoryName(path);
-                if (dir != null)
-                    Directory.CreateDirectory(dir);
-
                 var w = new StreamWriter(path) { AutoFlush = true };
-
-                await mutex.WaitAsync();
                 writer = w;
             }
         } finally {
