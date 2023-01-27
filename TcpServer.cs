@@ -27,10 +27,10 @@ internal class TcpServer : IServer {
     public async Task Start(CancellationToken token) {
         await Log.Write($"tunneling {config.ListenUri} -> {config.TunnelUri}");
 
-        var sockMap2 = new SocketMap2(ctx, Resolve);
         var ctx = new Contextualizer(ProtocolByte.TcpListener, config, token);
+        var sockMap2 = new SocketMap2(ctx, CannotConstructSocket);
 
-        var at = AcceptLoop(token);
+        var at = AcceptLoop(sockMap2, ctx);
         var tt = Multiplex(sockMap2, ctx);
         await Task.WhenAll(at, tt);
     }
@@ -52,7 +52,7 @@ internal class TcpServer : IServer {
             while (true) {
                 var s = await listener.AcceptAsync(ctx.CrossContextToken);
 
-                var sctx=ctx.Contextualize(new SocketId(), s);
+                var sctx = ctx.Contextualize(new SocketId(), s);
 
                 await Log.Write($"accepted connection {sctx.Id} from {s.RemoteEndPoint}");
 
@@ -91,7 +91,7 @@ internal class TcpServer : IServer {
         return ws;
     }
 
-    private Task<Socket> Resolve(SocketId id, CancellationToken token) {
-        return Task.FromException<Socket>(new Exception($"no socket with id {id}"));
+    private static Socket CannotConstructSocket() {
+        throw new Exception("cannot construct socket");
     }
 }

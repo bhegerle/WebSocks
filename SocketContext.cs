@@ -12,11 +12,11 @@ internal sealed class SocketContext : IDisposable {
     private readonly IPEndPoint connectTo;
     private bool connected;
 
-    internal SocketContext(Socket sock, SocketId id, IPEndPoint connectTo, CancellationToken crossContextToken) {
+    internal SocketContext(Socket sock, SocketId id, IPEndPoint connectTo, Contextualizer ctx) {
         this.sock = sock;
         Id = id;
         this.connectTo = connectTo;
-        cts = CancellationTokenSource.CreateLinkedTokenSource(crossContextToken);
+        cts = ctx.Link();
 
         mutex = new SemaphoreSlim(1);
 
@@ -26,7 +26,7 @@ internal sealed class SocketContext : IDisposable {
 
             connected = false;
         } else {
-            if (sock.Connected)
+            if (!sock.Connected)
                 throw new Exception("socket not connected");
 
             connected = true;

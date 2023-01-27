@@ -1,5 +1,7 @@
-﻿using System.Net.Sockets;
+﻿using Microsoft.AspNetCore.Mvc;
+using System.Net.Sockets;
 using System.Net.WebSockets;
+using WebStunnel;
 
 namespace WebStunnel;
 
@@ -15,88 +17,96 @@ internal sealed class Multiplexer : IDisposable {
         this.sockMap = sockMap;
     }
 
-    internal static async Task Multiplex(
-        WebSocket ws,
-        SocketMap2 sockMap,
-        Contextualizer ctx) {
+    internal static async Task Multiplex(WebSocket ws, SocketMap2 sockMap, Contextualizer ctx) {
         var wsCtx = ctx.Contextualize(ws);
-        await Multiplex(wsCtx, sockMap, ctx);
+
+        using var ln = ctx.Link();
+        var a = sockMap.Apply((s) => SocketReceive(s, wsCtx), ln.Token);
+
+        await WebSocketReceive(wsCtx, sockMap);
     }
 
-    internal static async Task Multiplex(
-        IEnumerable<ClientWebSocket> wsSeq,
-        SocketMap2 sockMap,
-        Contextualizer ctx) {
-
+    internal static async Task Multiplex(IEnumerable<ClientWebSocket> wsSeq, SocketMap2 sockMap, Contextualizer ctx) {
         await foreach (var ws in ctx.ApplyRateLimit(wsSeq)) {
+            var wsCtx = ctx.Contextualize(ws);
+
+            using var ln = ctx.Link();
+            var recvAll = sockMap.Apply((s) => SocketReceive(s, wsCtx), ln.Token);
+
             try {
-                var wsCtx = ctx.Contextualize(ws);
-                await Multiplex(wsCtx, sockMap, ctx);
-            } catch {
-                // do something
+                await WebSocketReceive(wsCtx, sockMap);
+            } finally {
+                ln.Cancel();
+                await recvAll;
             }
         }
     }
 
-    private static async Task Multiplex(WebSocketContext wsCtx, SocketMap2 sockMap, Contextualizer ctx) {
-        using var smCts = ctx.Link();
-        var foo = sockMap.ReceiveFromAll((s, t) => SocketReceive(s, sockMap, t), smCts.Token);
+    private static async Task WebSocketReceive(WebSocketContext wsCtx, SocketMap2 sockMap) {
+        var seg = NewSeg();
 
         try {
-            await WebSocketReceive(wsCtx, sockMap, ctx);
+            while (true) {
+                var framedMsg = await wsCtx.Receive(seg);
+                await Dispatch(framedMsg, sockMap);
+            }
+        } catch (Exception e) {
+            await Log.Warn("exception while receiving from WebSocket", e);
         } finally {
-            await foo;
+            await sockMap.CancelAll();
         }
     }
 
-    private static async Task WebSocketReceive(WebSocketContext wsCtx, SocketMap2 sockMap, Contextualizer ctx) {
+    private static async Task SocketReceive(SocketContext sock, WebSocketContext wsCtx) {
         var seg = NewSeg();
 
-        while (true) {
-            var framedMsg = await wsCtx.Receive(seg);
-
-            var f = new Frame(framedMsg, SocketId.Size, false);
-            var id = new SocketId(f.Suffix);
-            var msg = f.Message;
-
-            bool rmSock;
-            if (msg.Count > 0) {
-                SocketContext sock = null;
-                try {
-                    using var c = ctx.ConnectTimeout();
-                    sock = await sockMap.Get(id, c.Token);
-                } catch (Exception e) {
-                    await Log.Warn($"could not get socket {id}", e);
+        try {
+            while (true) {
+                var msg = await sock.Receive(seg);
+                if (msg.Count > 0) {
+                    await Dispatch(msg, sock.Id, wsCtx);
+                } else {
+                    await Log.Write($"closing socket {sock.Id}");
+                    break;
                 }
+            }
+        } catch (Exception e) {
+            await Log.Warn("exception while receiving from socket", e);
+        } finally {
+            await sock.Cancel();
+        }
+    }
 
-                try {
-                    if (sock != null)
-                        await sock.Send(msg);
-                    rmSock = false;
-                } catch (Exception e) {
-                    await Log.Warn($"failed to send to socket {id}", e);
-                    rmSock = true;
-                }
-            } else {
-                rmSock = true;
+    private static async Task Dispatch(ArraySegment<byte> framedMsg, SocketMap2 sockMap) {
+        var f = new Frame(framedMsg, SocketId.Size, false);
+        var id = new SocketId(f.Suffix);
+        var msg = f.Message;
+
+        if (msg.Count > 0) {
+            SocketContext sock;
+            try {
+                sock = await sockMap.Get(id);
+            } catch (Exception e) {
+                await Log.Warn($"could not get socket {id}", e);
+                return;
             }
 
-            if (rmSock)
-                await sockMap.Remove(id);
+            try {
+                await sock.Send(f.Message);
+            } catch (Exception e) {
+                await Log.Warn($"could not send to socket {id}", e);
+            }
+        } else {
+            var sock = await sockMap.TryGet(id);
+            await sock?.Cancel();
         }
     }
 
-    private static Task SocketReceive(SocketContext arg1, SocketMap2 sockMap, CancellationToken token) {
-        var seg = NewSeg();
-        while (true) {
-            var msg = arg1.Receive(seg);
+    private static async Task Dispatch(ArraySegment<byte> msg, SocketId id, WebSocketContext wsCtx) {
+        var f = new Frame(msg, SocketId.Size, true);
+        id.Write(f.Suffix);
 
-            add id;
-
-
-        }
-
-        //finally remove from sockmap here
+        await wsCtx.Send(f.Complete);
     }
 
     internal async Task Multiplex(CancellationToken token) {
@@ -186,26 +196,26 @@ internal sealed class Multiplexer : IDisposable {
     }
 
     private async Task SocketReceiveLoop(SocketId id, Socket s) {
-        var seg = NewSeg();
-        var idBuf = id.GetSegment();
+        //var seg = NewSeg();
+        //var idBuf = id.GetSegment();
 
-        try {
-            while (true) {
-                using var recvTimeout = IdleTimeout();
-                var msg = await s.Receive(seg, recvTimeout.Token);
+        //try {
+        //    while (true) {
+        //        using var recvTimeout = IdleTimeout();
+        //        var msg = await s.Receive(seg, recvTimeout.Token);
 
-                var f = new Frame(msg, idBuf.Count, true);
-                idBuf.CopyTo(f.Suffix);
+        //        var f = new Frame(msg, idBuf.Count, true);
+        //        idBuf.CopyTo(f.Suffix);
 
-                using var sendTimeout = SendTimeout();
-                await channel.Send(f.Complete, sendTimeout.Token);
+        //        using var sendTimeout = SendTimeout();
+        //        await channel.Send(f.Complete, sendTimeout.Token);
 
-                if (msg.Count == 0)
-                    break;
-            }
-        } finally {
-            await sockMap.RemoveSocket(id);
-        }
+        //        if (msg.Count == 0)
+        //            break;
+        //    }
+        //} finally {
+        //    await sockMap.RemoveSocket(id);
+        //}
     }
 
     private static ArraySegment<byte> NewSeg() {

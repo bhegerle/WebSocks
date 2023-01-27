@@ -4,11 +4,7 @@ namespace WebStunnel;
 
 internal sealed record SocketId {
     internal SocketId() {
-        var b = new byte[Size];
-        while (Value == 0) {
-            RandomNumberGenerator.Fill(b);
-            Value = BitConverter.ToUInt32(b);
-        }
+        Value = (uint)RandomNumberGenerator.GetInt32(1, int.MaxValue);
     }
 
     internal SocketId(Span<byte> b) {
@@ -21,8 +17,9 @@ internal sealed record SocketId {
 
     internal uint Value { get; }
 
-    internal ArraySegment<byte> GetSegment() {
-        return BitConverter.GetBytes(Value).AsSegment();
+    internal void Write(Span<byte> x) {
+        if (!BitConverter.TryWriteBytes(x, Value))
+            throw new Exception("could not write SocketId");
     }
 
     public override string ToString() {

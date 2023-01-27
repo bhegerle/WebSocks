@@ -11,16 +11,16 @@ internal class WebSocketContext : IDisposable {
     private readonly Codec codec;
     private Connector connector;
 
-    internal WebSocketContext(WebSocket ws, Codec codec, CancellationToken crossContextToken) {
+    internal WebSocketContext(WebSocket ws, Codec codec, Contextualizer ctx) {
         this.ws = ws;
         this.codec = codec;
 
-        cts = CancellationTokenSource.CreateLinkedTokenSource(crossContextToken);
+        cts = ctx.Link();
         mutex = new SemaphoreSlim(1);
     }
 
-    internal WebSocketContext(ClientWebSocket ws, Uri connectTo, Codec codec, CancellationToken crossContextToken)
-        : this(ws, codec, crossContextToken) {
+    internal WebSocketContext(ClientWebSocket ws, Uri connectTo, Codec codec, Contextualizer ctx)
+        : this(ws, codec, ctx) {
         connector = new Connector(ws, connectTo);
     }
 

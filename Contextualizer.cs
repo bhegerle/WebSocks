@@ -40,25 +40,25 @@ internal class Contextualizer {
     }
 
     internal SocketContext Contextualize(SocketId id, Socket s) {
-        return new SocketContext(s, id, socketEndPoint, CrossContextToken);
+        return new SocketContext(s, id, socketEndPoint, this);
     }
 
     internal WebSocketContext Contextualize(WebSocket ws) {
         var codec = new Codec(protoByte, config);
-        return new WebSocketContext(ws, codec, CrossContextToken);
+        return new WebSocketContext(ws, codec, this);
     }
 
     internal WebSocketContext Contextualize(ClientWebSocket ws) {
         var codec = new Codec(protoByte, config);
-        return new WebSocketContext(ws, webSocketUri, codec, CrossContextToken);
+        return new WebSocketContext(ws, webSocketUri, codec, this);
     }
 
     internal CancellationTokenSource ConnectTimeout() {
-        return Timeout(config.ConnectTimeout );
+        return Timeout(config.ConnectTimeout);
     }
 
     private CancellationTokenSource Timeout(TimeSpan t) {
-        var c = CancellationTokenSource.CreateLinkedTokenSource(CrossContextToken);
+        var c = Link();
         c.CancelAfter(t);
         return c;
     }

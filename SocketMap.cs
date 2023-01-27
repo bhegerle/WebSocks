@@ -3,15 +3,15 @@
 namespace WebStunnel;
 
 internal sealed class SocketMap2 : IDisposable {
+    private readonly Contextualizer ctx;
+    private readonly Func<Socket> socketCon;
     private readonly SemaphoreSlim mutex;
     private readonly IDictionary<SocketId, SocketContext> map;
     private readonly AsyncQueue<SocketMapping> queue;
-    private readonly Func<SocketId, CancellationToken, Task<Socket>> resolver;
-    private readonly Contextualizer ctx;
 
-    internal SocketMap2(Contextualizer ctx, Func<SocketId, CancellationToken, Task<Socket>> resolver) {
+    internal SocketMap2(Contextualizer ctx, Func<Socket> socketCon) {
         this.ctx = ctx;
-        this.resolver = resolver;
+        this.socketCon = socketCon;
         mutex = new SemaphoreSlim(1);
         map = new Dictionary<SocketId, SocketContext>();
         queue = new AsyncQueue<SocketMapping>();
@@ -28,44 +28,38 @@ internal sealed class SocketMap2 : IDisposable {
         await queue.Enqueue(new SocketMapping(sockCtx, true));
     }
 
-    internal async Task<SocketContext> Get(SocketId id, CancellationToken token) {
-        using var linked = ctx.Link(token);
-
-        await mutex.WaitAsync(linked.Token);
+    internal async Task<SocketContext> TryGet(SocketId id) {
+        await mutex.WaitAsync();
         try {
             if (map.TryGetValue(id, out var sock))
                 return sock;
-        } finally {
-            mutex.Release();
-        }
-
-        var rsock = await resolver(id, token);
-        var rctx = ctx.Contextualize(id, rsock);
-
-        await mutex.WaitAsync(linked.Token);
-        try {
-            map.Add(id, rctx);
-            return rctx;
+            else
+                return null;
         } finally {
             mutex.Release();
         }
     }
 
-    internal async Task Remove(SocketId id) {
-        SocketContext ctx;
-
+    internal async Task<SocketContext> Get(SocketId id) {
         await mutex.WaitAsync();
         try {
-            if (!map.TryGetValue(id, out ctx))
-                return;
+            if (!map.TryGetValue(id, out var sock)) {
+                sock = ctx.Contextualize(id, socketCon());
+                map.Add(id, sock);
+                await queue.Enqueue(new SocketMapping(sock, true));
+            }
+
+            return sock;
         } finally {
             mutex.Release();
         }
+    }
 
+    internal async Task Remove(SocketContext ctx) {
         await queue.Enqueue(new SocketMapping(ctx, false));
     }
 
-    internal async Task Reset() {
+    internal async Task CancelAll() {
         List<SocketContext> list;
 
         await mutex.WaitAsync();
@@ -83,16 +77,30 @@ internal sealed class SocketMap2 : IDisposable {
             }
     }
 
-    internal async Task ReceiveFromAll(Func<SocketContext, CancellationToken, Task> receiver, CancellationToken token) {
+    internal async Task Apply(Func<SocketContext, Task> receiver, CancellationToken token) {
         var taskMap = new Dictionary<SocketId, Task>();
-        await foreach (var m in queue.Consume(token)) {
 
+        try {
+            await foreach (var m in queue.Consume(token)) {
+                var id = m.SocketCtx.Id;
+                if (m.Add) {
+                    try {
+                        taskMap[id] = receiver(m.SocketCtx).WaitAsync(token);
+                    } catch (Exception e) {
+                        await Log.Warn($"could not start receiver for {id}", e);
+                    }
+                } else {
+                    throw new Exception("not impl");
+                }
+            }
+        } finally {
+            await Task.WhenAll(taskMap.Values);
         }
     }
 
     public void Dispose() {
         queue.Dispose();
     }
-}
 
-internal sealed record SocketMapping(SocketContext SocketCtx, bool Add);
+    private sealed record SocketMapping(SocketContext SocketCtx, bool Add);
+}
