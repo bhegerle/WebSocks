@@ -50,11 +50,13 @@ internal class TcpServer : IServer {
             await Log.Write($"listening on {listener.LocalEndPoint}");
 
             while (true) {
-                var s = await listener.AcceptAsync(token);
+                var s = await listener.AcceptAsync(ctx.CrossContextToken);
 
-                await Log.Write($"accepted connection {id} from {s.RemoteEndPoint}");
+                var sctx=ctx.Contextualize(new SocketId(), s);
 
-                await sockMap.AddSocket(id, s);
+                await Log.Write($"accepted connection {sctx.Id} from {s.RemoteEndPoint}");
+
+                await sockMap.Add(sctx);
             }
         } catch (OperationCanceledException) {
             await Log.Write("cancelled socket accept");

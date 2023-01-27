@@ -13,7 +13,7 @@ internal class Contextualizer {
     internal Contextualizer(ProtocolByte protoByte, Config config, CancellationToken crossContextToken) {
         this.protoByte = protoByte;
         this.config = config;
-        this.CrossContextToken = crossContextToken;
+        CrossContextToken = crossContextToken;
 
         if (protoByte == ProtocolByte.WsListener) {
             config.TunnelUri.CheckUri("socket endpoint", "tcp");
@@ -24,9 +24,18 @@ internal class Contextualizer {
         }
     }
 
-    private CancellationToken CrossContextToken { get; }
+#warning can this be made private?
+    internal CancellationToken CrossContextToken { get; }
 
-    internal IAsyncEnumerable<T> WithReconnectRateLimit<T>(IEnumerable<T> seq) {
+    internal CancellationTokenSource Link() {
+        return CancellationTokenSource.CreateLinkedTokenSource(CrossContextToken);
+    }
+
+    internal CancellationTokenSource Link(CancellationToken token) {
+        return CancellationTokenSource.CreateLinkedTokenSource(CrossContextToken, token);
+    }
+
+    internal IAsyncEnumerable<T> ApplyRateLimit<T>(IEnumerable<T> seq) {
         return seq.RateLimited(config.ReconnectDelay, CrossContextToken);
     }
 
@@ -42,5 +51,15 @@ internal class Contextualizer {
     internal WebSocketContext Contextualize(ClientWebSocket ws) {
         var codec = new Codec(protoByte, config);
         return new WebSocketContext(ws, webSocketUri, codec, CrossContextToken);
+    }
+
+    internal CancellationTokenSource ConnectTimeout() {
+        return Timeout(config.ConnectTimeout );
+    }
+
+    private CancellationTokenSource Timeout(TimeSpan t) {
+        var c = CancellationTokenSource.CreateLinkedTokenSource(CrossContextToken);
+        c.CancelAfter(t);
+        return c;
     }
 }
