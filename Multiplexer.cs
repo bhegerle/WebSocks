@@ -1,7 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using System.Net.Sockets;
-using System.Net.WebSockets;
-using WebStunnel;
+﻿using System.Net.WebSockets;
 
 namespace WebStunnel;
 
@@ -85,7 +82,8 @@ internal static class Multiplexer {
             }
         } else {
             var sock = await sockMap.TryGet(id);
-            await sock?.Cancel();
+            if (sock != null)
+                await sock.Cancel();
         }
     }
 
