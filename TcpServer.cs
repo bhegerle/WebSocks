@@ -19,7 +19,7 @@ internal class TcpServer : IServer {
         await Log.Write($"tunneling {config.ListenUri} -> {config.TunnelUri}");
 
         var ctx = new Contextualizer(ProtocolByte.TcpListener, config, token);
-        var sockMap2 = new SocketMap2(ctx, CannotConstructSocket);
+        var sockMap2 = new SocketMap(ctx, CannotConstructSocket);
 
         var at = AcceptLoop(sockMap2, ctx);
         var tt = Multiplex(sockMap2, ctx);
@@ -30,7 +30,7 @@ internal class TcpServer : IServer {
         return ValueTask.CompletedTask;
     }
 
-    private async Task AcceptLoop(SocketMap2 sockMap, Contextualizer ctx) {
+    private async Task AcceptLoop(SocketMap sockMap, Contextualizer ctx) {
         try {
             using var listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
             listener.Bind(config.ListenUri.EndPoint());
@@ -57,7 +57,7 @@ internal class TcpServer : IServer {
         }
     }
 
-    private async Task Multiplex(SocketMap2 sockMap, Contextualizer ctx) {
+    private async Task Multiplex(SocketMap sockMap, Contextualizer ctx) {
         try {
             await Multiplexer.Multiplex(Repeatedly.Invoke(x), sockMap, ctx);
         } catch (OperationCanceledException) {

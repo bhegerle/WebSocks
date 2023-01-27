@@ -7,7 +7,7 @@ namespace WebStunnel;
 
 internal static class Multiplexer {
 
-    internal static async Task Multiplex(WebSocket ws, SocketMap2 sockMap, Contextualizer ctx) {
+    internal static async Task Multiplex(WebSocket ws, SocketMap sockMap, Contextualizer ctx) {
         var wsCtx = ctx.Contextualize(ws);
 
         using var ln = ctx.Link();
@@ -16,7 +16,7 @@ internal static class Multiplexer {
         await WebSocketReceive(wsCtx, sockMap);
     }
 
-    internal static async Task Multiplex(IEnumerable<ClientWebSocket> wsSeq, SocketMap2 sockMap, Contextualizer ctx) {
+    internal static async Task Multiplex(IEnumerable<ClientWebSocket> wsSeq, SocketMap sockMap, Contextualizer ctx) {
         await foreach (var ws in ctx.ApplyRateLimit(wsSeq)) {
             var wsCtx = ctx.Contextualize(ws);
 
@@ -32,7 +32,7 @@ internal static class Multiplexer {
         }
     }
 
-    private static async Task WebSocketReceive(WebSocketContext wsCtx, SocketMap2 sockMap) {
+    private static async Task WebSocketReceive(WebSocketContext wsCtx, SocketMap sockMap) {
         var seg = NewSeg();
 
         try {
@@ -47,7 +47,7 @@ internal static class Multiplexer {
         }
     }
 
-    private static async Task SocketReceive(SocketContext sock, WebSocketContext wsCtx, SocketMap2 sockMap) {
+    private static async Task SocketReceive(SocketContext sock, WebSocketContext wsCtx, SocketMap sockMap) {
         var seg = NewSeg();
 
         try {
@@ -62,12 +62,10 @@ internal static class Multiplexer {
             }
         } catch (Exception e) {
             await Log.Warn("exception while receiving from socket", e);
-        } finally {
-            await sockMap.Remove(sock);
         }
     }
 
-    private static async Task Dispatch(ArraySegment<byte> framedMsg, SocketMap2 sockMap) {
+    private static async Task Dispatch(ArraySegment<byte> framedMsg, SocketMap sockMap) {
         var f = new Frame(framedMsg, SocketId.Size, false);
         var id = new SocketId(f.Suffix);
         var msg = f.Message;

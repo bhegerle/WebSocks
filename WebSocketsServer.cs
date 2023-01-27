@@ -63,7 +63,7 @@ internal class WebSocketsServer : IServer {
             await Log.Write("accepted WebSocket");
 
             var ctx = new Contextualizer(ProtocolByte.WsListener, config, cts.Token);
-            using var sockMap = new SocketMap2(ctx, ConstructSocket);
+            using var sockMap = new SocketMap(ctx, ConstructSocket);
 
             await Multiplexer.Multiplex(ws, sockMap, ctx);
         } else {

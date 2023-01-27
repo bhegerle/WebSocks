@@ -2,14 +2,14 @@
 
 namespace WebStunnel;
 
-internal sealed class SocketMap2 : IDisposable {
+internal sealed class SocketMap : IDisposable {
     private readonly Contextualizer ctx;
     private readonly Func<Socket> socketCon;
     private readonly SemaphoreSlim mutex;
     private readonly IDictionary<SocketId, SocketContext> map;
     private readonly AsyncQueue<SocketMapping> queue;
 
-    internal SocketMap2(Contextualizer ctx, Func<Socket> socketCon) {
+    internal SocketMap(Contextualizer ctx, Func<Socket> socketCon) {
         this.ctx = ctx;
         this.socketCon = socketCon;
         mutex = new SemaphoreSlim(1);
@@ -26,10 +26,6 @@ internal sealed class SocketMap2 : IDisposable {
         }
 
         await queue.Enqueue(new SocketMapping(sockCtx, true));
-    }
-
-    internal async Task Remove(SocketContext ctx) {
-        await queue.Enqueue(new SocketMapping(ctx, false));
     }
 
     internal async Task<SocketContext> TryGet(SocketId id) {
