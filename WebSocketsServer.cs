@@ -26,14 +26,25 @@ internal class WebSocketsServer : IServer {
 
     public async Task Start(CancellationToken token) {
         await Log.Write($"tunneling {config.ListenUri} -> {TunnelUri}");
-        await app.StartAsync();
+        await app.StartAsync(token);
 
         try {
             await Task.Delay(Timeout.Infinite, token);
         } finally {
             await Log.Write("cancelling ws tasks");
             cts.Cancel();
-            await app.StopAsync();
+
+            await Stop();
+        }
+    }
+
+    private async Task Stop() {
+        try {
+            using var stop = new CancellationTokenSource();
+            stop.CancelAfter(500);
+            await app.StopAsync(stop.Token);
+        } catch {
+            // ignored
         }
     }
 
@@ -50,10 +61,11 @@ internal class WebSocketsServer : IServer {
             await Log.Write("accepted WebSocket");
 
             var wsSrc = new SingletonWebSocketSource(ws);
-            var channelCon = new ChannelConnector(ProtocolByte.WsListener, config, wsSrc);
+            var wsSngl = WebSocketConnector.Singleton(ws);
+            var channelCon = new ChannelConnector(ProtocolByte.WsListener, config, wsSrc, wsSngl);
             var sockMap = new AutoconnectSocketMap(config.TunnelUri.EndPoint());
 
-            var multiplexer = new Multiplexer(channelCon, sockMap);
+            using var multiplexer = new Multiplexer(channelCon, sockMap);
 
             await multiplexer.Multiplex(cts.Token);
         } else {

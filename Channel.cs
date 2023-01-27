@@ -1,6 +1,10 @@
 ﻿using System.Net.WebSockets;
 
-namespace WebStunnel; 
+namespace WebStunnel;
+
+internal class ChannelException : Exception {
+    internal ChannelException(string message, Exception e) : base(message, e) { }
+}
 
 internal class Channel : IDisposable {
     private readonly WebSocket ws;
@@ -15,7 +19,7 @@ internal class Channel : IDisposable {
     }
 
     public void Dispose() {
-        ws?.Dispose();
+        ws.Dispose();
     }
 
     internal async Task HandshakeCheck(CancellationToken token) {
@@ -34,16 +38,13 @@ internal class Channel : IDisposable {
                 await Log.Write("    completed handshake");
             }
         } catch (Exception ex) {
-            await Log.Warn("handshake failed", ex);
-            throw;
+            throw new ChannelException("handshake failed", ex);
         } finally {
             mutex.Release();
         }
     }
 
     internal async Task Send(ArraySegment<byte> seg, CancellationToken token) {
-        var n = seg.Count;
-
         await mutex.WaitAsync(token);
         try {
             seg = codec.AuthMessage(seg);
@@ -56,8 +57,6 @@ internal class Channel : IDisposable {
 
     internal async Task<ArraySegment<byte>> Receive(ArraySegment<byte> seg, CancellationToken token) {
         seg = await WsRecv(seg, token);
-
-        var n = seg.Count;
 
         await mutex.WaitAsync(token);
         try {
@@ -77,7 +76,7 @@ internal class Channel : IDisposable {
             var recv = await ws.ReceiveAsync(seg, token);
             if (recv.MessageType != WebSocketMessageType.Binary)
                 throw new Exception("non-binary message received");
-            
+
             n += recv.Count;
             seg = seg[recv.Count..];
 

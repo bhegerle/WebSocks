@@ -10,7 +10,6 @@ public record Config {
     public string Key { get; init; }
     public string LogPath { get; init; }
     public bool Verbose { get; init; }
-    public Uri Foo { get; init; }
 
     public TimeSpan SendTimeout { get; init; } = TimeSpan.FromSeconds(1);
     public TimeSpan IdleTimeout { get; init; } = TimeSpan.FromMinutes(10);

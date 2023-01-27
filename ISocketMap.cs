@@ -12,7 +12,7 @@ internal record SocketSnapshot(ImmutableDictionary<SocketId, Socket> Sockets, Li
     }
 }
 
-internal interface ISocketMap {
+internal interface ISocketMap : IDisposable {
     Task<Socket> GetSocket(SocketId id, CancellationToken token);
     Task RemoveSocket(SocketId id);
     Task Reset();

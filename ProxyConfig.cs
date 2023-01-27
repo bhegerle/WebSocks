@@ -8,6 +8,7 @@ public record ProxyConfig {
     public string HttpProxy { get; init; }
 
     internal void Configure(ClientWebSocket ws, Uri uri) {
+        throw new Exception("Arg");
         var proxy = TryGetProxy(uri);
 
         if (proxy != null)

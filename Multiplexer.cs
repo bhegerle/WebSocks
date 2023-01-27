@@ -1,11 +1,11 @@
-﻿using System.Diagnostics.Eventing.Reader;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
+using System.Net.WebSockets;
 
 namespace WebStunnel;
 
 using static Timeouts;
 
-internal class Multiplexer {
+internal sealed class Multiplexer : IDisposable {
     private readonly ChannelConnector channelCon;
     private readonly ISocketMap sockMap;
     private Channel channel;
@@ -13,6 +13,29 @@ internal class Multiplexer {
     internal Multiplexer(ChannelConnector channelCon, ISocketMap sockMap) {
         this.channelCon = channelCon;
         this.sockMap = sockMap;
+    }
+
+    internal static async Task Multiplex(
+        WebSocket ws,
+        SocketMap2 sockMap,
+        Contextualizer ctx) {
+        var wsCtx = ctx.Contextualize(ws);
+        await Multiplex(wsCtx, sockMap, ctx);
+    }
+
+    internal static async Task Multiplex(
+        IEnumerable<ClientWebSocket> wsSeq,
+        SocketMap2 sockMap,
+        Contextualizer ctx) {
+
+        await foreach (var ws in ctx.WithReconnectRateLimit(wsSeq)) {
+            var wsCtx = ctx.Contextualize(ws);
+            await Multiplex(wsCtx, sockMap, ctx);
+        }
+    }
+
+    private static Task Multiplex(WebSocketContext wsCtx, SocketMap2 sockMap, Contextualizer ctx) {
+        throw new InternalBufferOverflowException();
     }
 
     internal async Task Multiplex(CancellationToken token) {
@@ -43,6 +66,11 @@ internal class Multiplexer {
 
             token.ThrowIfCancellationRequested();
         }
+    }
+
+    public void Dispose() {
+        channel?.Dispose();
+        sockMap.Dispose();
     }
 
     private async Task<Channel> Connect(CancellationToken token) {
