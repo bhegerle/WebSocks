@@ -6,12 +6,11 @@ using WebStunnel;
 namespace WebStunnel;
 
 internal static class Multiplexer {
-
     internal static async Task Multiplex(WebSocket ws, SocketMap sockMap, Contextualizer ctx) {
         var wsCtx = ctx.Contextualize(ws);
 
         using var ln = ctx.Link();
-        var a = sockMap.Apply((s) => SocketReceive(s, wsCtx, sockMap), ln.Token);
+        var a = sockMap.Apply((s) => SocketReceive(s, wsCtx), ln.Token);
 
         await WebSocketReceive(wsCtx, sockMap);
     }
@@ -21,7 +20,7 @@ internal static class Multiplexer {
             var wsCtx = ctx.Contextualize(ws);
 
             using var ln = ctx.Link();
-            var recvAll = sockMap.Apply((s) => SocketReceive(s, wsCtx, sockMap), ln.Token);
+            var recvAll = sockMap.Apply((s) => SocketReceive(s, wsCtx), ln.Token);
 
             try {
                 await WebSocketReceive(wsCtx, sockMap);
@@ -47,15 +46,15 @@ internal static class Multiplexer {
         }
     }
 
-    private static async Task SocketReceive(SocketContext sock, WebSocketContext wsCtx, SocketMap sockMap) {
+    private static async Task SocketReceive(SocketContext sock, WebSocketContext wsCtx) {
         var seg = NewSeg();
 
         try {
             while (true) {
                 var msg = await sock.Receive(seg);
-                if (msg.Count > 0) {
-                    await Dispatch(msg, sock.Id, wsCtx);
-                } else {
+                await Dispatch(msg, sock.Id, wsCtx);
+
+                if (msg.Count == 0) {
                     await Log.Write($"closing socket {sock.Id}");
                     break;
                 }

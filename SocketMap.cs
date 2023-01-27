@@ -1,4 +1,5 @@
-﻿using System.Net.Sockets;
+﻿using System.Collections.Generic;
+using System.Net.Sockets;
 
 namespace WebStunnel;
 
@@ -7,25 +8,25 @@ internal sealed class SocketMap : IDisposable {
     private readonly Func<Socket> socketCon;
     private readonly SemaphoreSlim mutex;
     private readonly IDictionary<SocketId, SocketContext> map;
-    private readonly AsyncQueue<SocketMapping> queue;
+    private readonly AsyncQueue<SocketContext> queue;
 
     internal SocketMap(Contextualizer ctx, Func<Socket> socketCon) {
         this.ctx = ctx;
         this.socketCon = socketCon;
         mutex = new SemaphoreSlim(1);
         map = new Dictionary<SocketId, SocketContext>();
-        queue = new AsyncQueue<SocketMapping>();
+        queue = new AsyncQueue<SocketContext>();
     }
 
-    internal async Task Add(SocketContext sockCtx) {
+    internal async Task Add(SocketContext sock) {
         await mutex.WaitAsync();
         try {
-            map.Add(sockCtx.Id, sockCtx);
+            map.Add(sock.Id, sock);
         } finally {
             mutex.Release();
         }
 
-        await queue.Enqueue(new SocketMapping(sockCtx, true));
+        await queue.Enqueue(sock);
     }
 
     internal async Task<SocketContext> TryGet(SocketId id) {
@@ -43,16 +44,24 @@ internal sealed class SocketMap : IDisposable {
     internal async Task<SocketContext> Get(SocketId id) {
         await mutex.WaitAsync();
         try {
-            if (!map.TryGetValue(id, out var sock)) {
-                sock = ctx.Contextualize(id, socketCon());
-                map.Add(id, sock);
-                await queue.Enqueue(new SocketMapping(sock, true));
-            }
-
-            return sock;
+            if (map.TryGetValue(id, out var sock))
+                return sock;
         } finally {
             mutex.Release();
         }
+
+        var newSock = ctx.Contextualize(id, socketCon());
+
+        await mutex.WaitAsync();
+        try {
+            map.Add(id, newSock);
+        } finally {
+            mutex.Release();
+        }
+
+        await queue.Enqueue(newSock);
+
+        return newSock;
     }
 
     internal async Task CancelAll() {
@@ -77,26 +86,38 @@ internal sealed class SocketMap : IDisposable {
         var taskMap = new Dictionary<SocketId, Task>();
 
         try {
-            await foreach (var m in queue.Consume(token)) {
-                try {
-                    var id = m.SocketCtx.Id;
-                    if (m.Add) {
-                        taskMap[id] = receiver(m.SocketCtx);
-                    } else {
-                        if(taskMap.TryGetValue(id, out var t)){
-                            await t.WaitAsync(token);
-                        }   }
-                } catch (Exception e) {
-                    await Log.Warn($"excepting {m}", e);
-                }
+            await foreach (var sock in queue.Consume(token)) {
+                taskMap[sock.Id] = X(sock);
             }
-        } finally {
-            await Task.WhenAll(taskMap.Values);
+        } catch (OperationCanceledException) {
+            if (token.IsCancellationRequested)
+                await Task.WhenAll(taskMap.Values);
+        }
+
+        async Task X(SocketContext sock) {
+            try {
+                var rcv = receiver(sock);
+                await rcv.WaitAsync(token);
+            } catch (Exception e) {
+                if (!token.IsCancellationRequested)
+                    await Log.Warn($"exception receiving from socket", e);
+            } finally {
+                await Remove(sock);
+            }
         }
     }
 
     public void Dispose() {
         queue.Dispose();
+    }
+
+    private async Task Remove(SocketContext sock) {
+        await mutex.WaitAsync();
+        try {
+            map.Remove(sock.Id);
+        } finally {
+            mutex.Release();
+        }
     }
 
     private sealed record SocketMapping(SocketContext SocketCtx, bool Add) {
