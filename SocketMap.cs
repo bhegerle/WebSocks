@@ -28,6 +28,10 @@ internal sealed class SocketMap2 : IDisposable {
         await queue.Enqueue(new SocketMapping(sockCtx, true));
     }
 
+    internal async Task Remove(SocketContext ctx) {
+        await queue.Enqueue(new SocketMapping(ctx, false));
+    }
+
     internal async Task<SocketContext> TryGet(SocketId id) {
         await mutex.WaitAsync();
         try {
@@ -55,10 +59,6 @@ internal sealed class SocketMap2 : IDisposable {
         }
     }
 
-    internal async Task Remove(SocketContext ctx) {
-        await queue.Enqueue(new SocketMapping(ctx, false));
-    }
-
     internal async Task CancelAll() {
         List<SocketContext> list;
 
@@ -82,15 +82,16 @@ internal sealed class SocketMap2 : IDisposable {
 
         try {
             await foreach (var m in queue.Consume(token)) {
-                var id = m.SocketCtx.Id;
-                if (m.Add) {
-                    try {
-                        taskMap[id] = receiver(m.SocketCtx).WaitAsync(token);
-                    } catch (Exception e) {
-                        await Log.Warn($"could not start receiver for {id}", e);
-                    }
-                } else {
-                    throw new Exception("not impl");
+                try {
+                    var id = m.SocketCtx.Id;
+                    if (m.Add) {
+                        taskMap[id] = receiver(m.SocketCtx);
+                    } else {
+                        if(taskMap.TryGetValue(id, out var t)){
+                            await t.WaitAsync(token);
+                        }   }
+                } catch (Exception e) {
+                    await Log.Warn($"excepting {m}", e);
                 }
             }
         } finally {
@@ -102,5 +103,10 @@ internal sealed class SocketMap2 : IDisposable {
         queue.Dispose();
     }
 
-    private sealed record SocketMapping(SocketContext SocketCtx, bool Add);
+    private sealed record SocketMapping(SocketContext SocketCtx, bool Add) {
+        public override string ToString() {
+            var a = Add ? "add" : "remove";
+            return $"{a} socket mapping for {SocketCtx.Id}";
+        }
+    }
 }

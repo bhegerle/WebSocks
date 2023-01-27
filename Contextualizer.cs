@@ -9,11 +9,12 @@ internal class Contextualizer {
     private readonly Config config;
     private readonly IPEndPoint socketEndPoint;
     private readonly Uri webSocketUri;
+    private readonly CancellationToken crossContextToken;
 
     internal Contextualizer(ProtocolByte protoByte, Config config, CancellationToken crossContextToken) {
         this.protoByte = protoByte;
         this.config = config;
-        CrossContextToken = crossContextToken;
+        this.crossContextToken = crossContextToken;
 
         if (protoByte == ProtocolByte.WsListener) {
             config.TunnelUri.CheckUri("socket endpoint", "tcp");
@@ -24,42 +25,33 @@ internal class Contextualizer {
         }
     }
 
-#warning can this be made private?
-    internal CancellationToken CrossContextToken { get; }
-
     internal CancellationTokenSource Link() {
-        return CancellationTokenSource.CreateLinkedTokenSource(CrossContextToken);
+        return CancellationTokenSource.CreateLinkedTokenSource(crossContextToken);
     }
 
     internal CancellationTokenSource Link(CancellationToken token) {
-        return CancellationTokenSource.CreateLinkedTokenSource(CrossContextToken, token);
+        return CancellationTokenSource.CreateLinkedTokenSource(crossContextToken, token);
     }
 
     internal IAsyncEnumerable<T> ApplyRateLimit<T>(IEnumerable<T> seq) {
-        return seq.RateLimited(config.ReconnectDelay, CrossContextToken);
+        return seq.RateLimited(config.ReconnectDelay, crossContextToken);
     }
 
     internal SocketContext Contextualize(SocketId id, Socket s) {
-        return new SocketContext(s, id, socketEndPoint, this);
+        return new SocketContext(s, id, socketEndPoint, GetSocketCancellation());
     }
 
     internal WebSocketContext Contextualize(WebSocket ws) {
         var codec = new Codec(protoByte, config);
-        return new WebSocketContext(ws, codec, this);
+        return new WebSocketContext(ws, codec, GetSocketCancellation());
     }
 
     internal WebSocketContext Contextualize(ClientWebSocket ws) {
         var codec = new Codec(protoByte, config);
-        return new WebSocketContext(ws, webSocketUri, codec, this);
+        return new WebSocketContext(ws, webSocketUri, codec, GetSocketCancellation());
     }
 
-    internal CancellationTokenSource ConnectTimeout() {
-        return Timeout(config.ConnectTimeout);
-    }
-
-    private CancellationTokenSource Timeout(TimeSpan t) {
-        var c = Link();
-        c.CancelAfter(t);
-        return c;
+    internal SocketCancellation GetSocketCancellation() {
+        return new SocketCancellation(config, Link());
     }
 }

@@ -1,4 +1,6 @@
-﻿namespace WebStunnel;
+﻿using System.Net.Sockets;
+
+namespace WebStunnel;
 
 internal class WebSocketsServer : IServer {
     private readonly CancellationTokenSource cts;
@@ -53,24 +55,24 @@ internal class WebSocketsServer : IServer {
         cts.Dispose();
     }
 
-    private async Task Handler(HttpContext ctx, RequestDelegate next) {
-        await Log.Write($"request from {ctx.GetEndpoint()}");
+    private async Task Handler(HttpContext httpCtx, RequestDelegate next) {
+        await Log.Write($"request from {httpCtx.GetEndpoint()}");
 
-        if (ctx.WebSockets.IsWebSocketRequest) {
-            var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+        if (httpCtx.WebSockets.IsWebSocketRequest) {
+            var ws = await httpCtx.WebSockets.AcceptWebSocketAsync();
             await Log.Write("accepted WebSocket");
 
-            var wsSrc = new SingletonWebSocketSource(ws);
-            var wsSngl = WebSocketConnector.Singleton(ws);
-            var channelCon = new ChannelConnector(ProtocolByte.WsListener, config, wsSrc, wsSngl);
-            var sockMap = new AutoconnectSocketMap(config.TunnelUri.EndPoint());
+            var ctx = new Contextualizer(ProtocolByte.WsListener, config, cts.Token);
+            using var sockMap = new SocketMap2(ctx, ConstructSocket);
 
-            using var multiplexer = new Multiplexer(channelCon, sockMap);
-
-            await multiplexer.Multiplex(cts.Token);
+            await Multiplexer.Multiplex(ws, sockMap, ctx);
         } else {
             await Log.Warn("not WebSocket");
-            ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+            httpCtx.Response.StatusCode = StatusCodes.Status400BadRequest;
         }
+    }
+
+    private static Socket ConstructSocket() {
+        return new Socket(SocketType.Stream, ProtocolType.Tcp);
     }
 }

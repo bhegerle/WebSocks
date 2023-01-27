@@ -7,21 +7,12 @@ namespace WebStunnel;
 
 internal class TcpServer : IServer {
     private readonly Config config;
-    private readonly SocketMap sockMap;
-    private readonly Multiplexer multiplexer;
 
     internal TcpServer(Config config) {
         config.ListenUri.CheckUri("listen", "tcp");
         config.TunnelUri.CheckUri("bridge", "ws");
 
         this.config = config;
-
-        sockMap = new SocketMap();
-
-        var wsSrc = new AutoconnectWebSocketSource(config);
-        var wsArc = new WebSocketConnector(config).Autoreconnect();
-        var channelCon = new ChannelConnector(ProtocolByte.TcpListener, config, wsSrc, wsArc);
-        multiplexer = new Multiplexer(channelCon, sockMap);
     }
 
     public async Task Start(CancellationToken token) {
@@ -36,8 +27,6 @@ internal class TcpServer : IServer {
     }
 
     public ValueTask DisposeAsync() {
-        sockMap.Dispose();
-        multiplexer.Dispose();
         return ValueTask.CompletedTask;
     }
 
@@ -50,7 +39,8 @@ internal class TcpServer : IServer {
             await Log.Write($"listening on {listener.LocalEndPoint}");
 
             while (true) {
-                var s = await listener.AcceptAsync(ctx.CrossContextToken);
+                using var ln=ctx.Link();
+                var s = await listener.AcceptAsync(ln.Token);
 
                 var sctx = ctx.Contextualize(new SocketId(), s);
 

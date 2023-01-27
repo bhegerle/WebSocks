@@ -2,30 +2,28 @@
 
 namespace WebStunnel;
 
-using static Timeouts;
-
 internal class WebSocketContext : IDisposable {
     private readonly WebSocket ws;
-    private readonly CancellationTokenSource cts;
     private readonly SemaphoreSlim mutex;
     private readonly Codec codec;
+    private readonly SocketCancellation cancellation;
     private Connector connector;
 
-    internal WebSocketContext(WebSocket ws, Codec codec, Contextualizer ctx) {
+    internal WebSocketContext(WebSocket ws, Codec codec, SocketCancellation cancellation) {
         this.ws = ws;
         this.codec = codec;
+        this.cancellation = cancellation;
 
-        cts = ctx.Link();
         mutex = new SemaphoreSlim(1);
     }
 
-    internal WebSocketContext(ClientWebSocket ws, Uri connectTo, Codec codec, Contextualizer ctx)
-        : this(ws, codec, ctx) {
+    internal WebSocketContext(ClientWebSocket ws, Uri connectTo, Codec codec, SocketCancellation cancellation)
+        : this(ws, codec, cancellation) {
         connector = new Connector(ws, connectTo);
     }
 
     internal async Task Send(ArraySegment<byte> seg) {
-        using var sendTimeout = IdleTimeout(cts.Token);
+        using var sendTimeout = cancellation.IdleTimeout();
         await Check(sendTimeout.Token);
 
         try {
@@ -39,7 +37,7 @@ internal class WebSocketContext : IDisposable {
     }
 
     internal async Task<ArraySegment<byte>> Receive(ArraySegment<byte> seg) {
-        using var recvTimeout = IdleTimeout(cts.Token);
+        using var recvTimeout = cancellation.IdleTimeout();
         await Check(recvTimeout.Token);
 
         try {
@@ -56,26 +54,29 @@ internal class WebSocketContext : IDisposable {
 
     internal async Task Cancel() {
         await Log.Warn($"websocket cancelled");
-        cts.Cancel();
+        cancellation.Cancel();
     }
 
     public void Dispose() {
         ws.Dispose();
-        cts.Dispose();
+        cancellation.Dispose();
         mutex.Dispose();
     }
 
     private async Task Check(CancellationToken token) {
         await mutex.WaitAsync(token);
         try {
+            if (codec.State == CodecState.Active)
+                return;
+
+            using var conTimeout = cancellation.ConnectTimeout(token);
             if (connector != null) {
-                using var conTimeout = ConnectTimeout(token);
-                await connector.Connect(token);
+                await connector.Connect(conTimeout.Token);
                 connector = null;
             }
 
             if (codec.State == CodecState.Init) {
-                await HandshakeCheck(token);
+                await HandshakeCheck(conTimeout.Token);
             }
         } catch {
             await Cancel();
@@ -136,8 +137,7 @@ internal class WebSocketContext : IDisposable {
         internal async Task Connect(CancellationToken token) {
             try {
                 await Log.Write($"connecting to {ConnectTo}");
-                using var conTimeout = ConnectTimeout(token);
-                await WebSock.ConnectAsync(ConnectTo, conTimeout.Token);
+                await WebSock.ConnectAsync(ConnectTo, token);
             } catch (Exception ex) {
                 throw new Exception("websocket connect failed", ex);
                 throw;

@@ -5,23 +5,13 @@ using WebStunnel;
 
 namespace WebStunnel;
 
-using static Timeouts;
-
-internal sealed class Multiplexer : IDisposable {
-    private readonly ChannelConnector channelCon;
-    private readonly ISocketMap sockMap;
-    private Channel channel;
-
-    internal Multiplexer(ChannelConnector channelCon, ISocketMap sockMap) {
-        this.channelCon = channelCon;
-        this.sockMap = sockMap;
-    }
+internal static class Multiplexer {
 
     internal static async Task Multiplex(WebSocket ws, SocketMap2 sockMap, Contextualizer ctx) {
         var wsCtx = ctx.Contextualize(ws);
 
         using var ln = ctx.Link();
-        var a = sockMap.Apply((s) => SocketReceive(s, wsCtx), ln.Token);
+        var a = sockMap.Apply((s) => SocketReceive(s, wsCtx, sockMap), ln.Token);
 
         await WebSocketReceive(wsCtx, sockMap);
     }
@@ -31,7 +21,7 @@ internal sealed class Multiplexer : IDisposable {
             var wsCtx = ctx.Contextualize(ws);
 
             using var ln = ctx.Link();
-            var recvAll = sockMap.Apply((s) => SocketReceive(s, wsCtx), ln.Token);
+            var recvAll = sockMap.Apply((s) => SocketReceive(s, wsCtx, sockMap), ln.Token);
 
             try {
                 await WebSocketReceive(wsCtx, sockMap);
@@ -57,7 +47,7 @@ internal sealed class Multiplexer : IDisposable {
         }
     }
 
-    private static async Task SocketReceive(SocketContext sock, WebSocketContext wsCtx) {
+    private static async Task SocketReceive(SocketContext sock, WebSocketContext wsCtx, SocketMap2 sockMap) {
         var seg = NewSeg();
 
         try {
@@ -73,7 +63,7 @@ internal sealed class Multiplexer : IDisposable {
         } catch (Exception e) {
             await Log.Warn("exception while receiving from socket", e);
         } finally {
-            await sock.Cancel();
+            await sockMap.Remove(sock);
         }
     }
 
@@ -107,115 +97,6 @@ internal sealed class Multiplexer : IDisposable {
         id.Write(f.Suffix);
 
         await wsCtx.Send(f.Complete);
-    }
-
-    internal async Task Multiplex(CancellationToken token) {
-        while (true) {
-            try {
-                var c = await Connect(token);
-                if (c != null)
-                    channel = c;
-                else
-                    break;
-
-                using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-                var trecv = ChannelReceiveLoop(loopCts.Token);
-                var srecv = SocketMapLoop(loopCts.Token);
-
-                await Task.WhenAny(trecv, srecv);
-                loopCts.Cancel();
-                await Task.WhenAll(trecv, srecv);
-            } catch (ChannelConnectionException e) {
-                await Log.Warn(e.Message, e.InnerException);
-            } catch (OperationCanceledException) {
-                await Log.Write("multiplexing operation cancelled");
-            } catch (Exception e) {
-                await Log.Error("other exception while multiplexing", e);
-            } finally {
-                await sockMap.Reset();
-            }
-
-            token.ThrowIfCancellationRequested();
-        }
-    }
-
-    public void Dispose() {
-        channel?.Dispose();
-        sockMap.Dispose();
-    }
-
-    private async Task<Channel> Connect(CancellationToken token) {
-        return await channelCon.Connect(token);
-    }
-
-    private async Task ChannelReceiveLoop(CancellationToken token) {
-        var seg = NewSeg();
-        var idBuf = new byte[SocketId.Size].AsSegment();
-
-        while (true) {
-            using var recvTimeout = IdleTimeout(token);
-            var msg = await channel.Receive(seg, recvTimeout.Token);
-
-            var f = new Frame(msg, idBuf.Count, false);
-            var id = new SocketId(f.Suffix);
-            var sock = await sockMap.GetSocket(id, token);
-
-            if (f.Message.Count > 0) {
-                using var sendTimeout = SendTimeout(token);
-                await sock.Send(f.Message, sendTimeout.Token);
-            } else {
-                await sockMap.RemoveSocket(id);
-            }
-        }
-    }
-
-    private async Task SocketMapLoop(CancellationToken token) {
-        var taskMap = new Dictionary<SocketId, Task>();
-
-        while (true) {
-            using var snap = await sockMap.Snapshot();
-
-            try {
-                var newInSnap = snap.Sockets.Keys.Except(taskMap.Keys);
-                foreach (var sid in newInSnap) {
-                    taskMap.Add(sid, SocketReceiveLoop(sid, snap.Sockets[sid]));
-                }
-
-                var dropFromSnap = taskMap.Keys.Except(snap.Sockets.Keys);
-                foreach (var tid in dropFromSnap) {
-                    var t = taskMap[tid];
-                    if (await t.DidCompleteWithin(TimeSpan.FromMilliseconds(1)))
-                        taskMap.Remove(tid);
-                }
-
-                await snap.Lifetime.WhileAlive(token);
-            } finally {
-                await sockMap.Detach(snap);
-            }
-        }
-    }
-
-    private async Task SocketReceiveLoop(SocketId id, Socket s) {
-        //var seg = NewSeg();
-        //var idBuf = id.GetSegment();
-
-        //try {
-        //    while (true) {
-        //        using var recvTimeout = IdleTimeout();
-        //        var msg = await s.Receive(seg, recvTimeout.Token);
-
-        //        var f = new Frame(msg, idBuf.Count, true);
-        //        idBuf.CopyTo(f.Suffix);
-
-        //        using var sendTimeout = SendTimeout();
-        //        await channel.Send(f.Complete, sendTimeout.Token);
-
-        //        if (msg.Count == 0)
-        //            break;
-        //    }
-        //} finally {
-        //    await sockMap.RemoveSocket(id);
-        //}
     }
 
     private static ArraySegment<byte> NewSeg() {

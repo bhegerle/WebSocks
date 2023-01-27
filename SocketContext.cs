@@ -3,21 +3,20 @@ using System.Net.Sockets;
 
 namespace WebStunnel;
 
-using static Timeouts;
-
 internal sealed class SocketContext : IDisposable {
     private readonly SemaphoreSlim mutex;
     private readonly Socket sock;
-    private readonly CancellationTokenSource cts;
     private readonly IPEndPoint connectTo;
+    private readonly SocketCancellation cancellation;
     private bool connected;
 
-    internal SocketContext(Socket sock, SocketId id, IPEndPoint connectTo, Contextualizer ctx) {
+    internal SocketContext(Socket sock, SocketId id, IPEndPoint connectTo, SocketCancellation cancellation) {
         this.sock = sock;
-        Id = id;
         this.connectTo = connectTo;
-        cts = ctx.Link();
-
+        this.cancellation = cancellation;
+        
+        Id = id;
+        
         mutex = new SemaphoreSlim(1);
 
         if (connectTo != null) {
@@ -36,7 +35,7 @@ internal sealed class SocketContext : IDisposable {
     internal SocketId Id { get; }
 
     internal async Task Send(ArraySegment<byte> seg) {
-        using var sendTimeout = SendTimeout(cts.Token);
+        using var sendTimeout = cancellation.SendTimeout();
         await Check(sendTimeout.Token);
 
         try {
@@ -49,7 +48,7 @@ internal sealed class SocketContext : IDisposable {
     }
 
     internal async Task<ArraySegment<byte>> Receive(ArraySegment<byte> seg) {
-        using var recvTimeout = IdleTimeout(cts.Token);
+        using var recvTimeout = cancellation.IdleTimeout();
         await Check(recvTimeout.Token);
 
         try {
@@ -64,12 +63,12 @@ internal sealed class SocketContext : IDisposable {
 
     internal async Task Cancel() {
         await Log.Warn($"socket {Id} cancelled");
-        cts.Cancel();
+        cancellation.Cancel();
     }
 
     public void Dispose() {
         sock.Dispose();
-        cts.Dispose();
+        cancellation.Dispose();
         mutex.Dispose();
     }
 
@@ -77,7 +76,7 @@ internal sealed class SocketContext : IDisposable {
         await mutex.WaitAsync(token);
         try {
             if (!connected) {
-                using var conTimeout = ConnectTimeout(token);
+                using var conTimeout = cancellation.ConnectTimeout(token);
                 await sock.ConnectAsync(connectTo, conTimeout.Token);
                 connected = true;
             }
