@@ -7,16 +7,16 @@ internal sealed class SocketContext : IDisposable {
     private readonly SemaphoreSlim mutex;
     private readonly Socket sock;
     private readonly IPEndPoint connectTo;
-    private readonly SocketCancellation cancellation;
-    private bool connected;
+    private readonly SocketTiming sockTime;
+    private bool connected, readZero;
 
-    internal SocketContext(Socket sock, SocketId id, IPEndPoint connectTo, SocketCancellation cancellation) {
+    internal SocketContext(Socket sock, SocketId id, IPEndPoint connectTo, SocketTiming sockTime) {
         this.sock = sock;
         this.connectTo = connectTo;
-        this.cancellation = cancellation;
-        
+        this.sockTime = sockTime;
+
         Id = id;
-        
+
         mutex = new SemaphoreSlim(1);
 
         if (connectTo != null) {
@@ -35,7 +35,7 @@ internal sealed class SocketContext : IDisposable {
     internal SocketId Id { get; }
 
     internal async Task Send(ArraySegment<byte> seg) {
-        using var sendTimeout = cancellation.SendTimeout();
+        using var sendTimeout = sockTime.SendTimeout();
         await Check(sendTimeout.Token);
 
         try {
@@ -48,7 +48,7 @@ internal sealed class SocketContext : IDisposable {
     }
 
     internal async Task<ArraySegment<byte>> Receive(ArraySegment<byte> seg) {
-        using var recvTimeout = cancellation.IdleTimeout();
+        using var recvTimeout = sockTime.IdleTimeout();
         await Check(recvTimeout.Token);
 
         try {
@@ -63,12 +63,12 @@ internal sealed class SocketContext : IDisposable {
 
     internal async Task Cancel() {
         await Log.Warn($"socket {Id} cancelled");
-        cancellation.Cancel();
+        sockTime.Cancel();
     }
 
     public void Dispose() {
         sock.Dispose();
-        cancellation.Dispose();
+        sockTime.Dispose();
         mutex.Dispose();
     }
 
@@ -76,7 +76,7 @@ internal sealed class SocketContext : IDisposable {
         await mutex.WaitAsync(token);
         try {
             if (!connected) {
-                using var conTimeout = cancellation.ConnectTimeout(token);
+                using var conTimeout = sockTime.ConnectTimeout(token);
                 await sock.ConnectAsync(connectTo, conTimeout.Token);
                 connected = true;
             }

@@ -6,10 +6,10 @@ internal class WebSocketContext : IDisposable {
     private readonly WebSocket ws;
     private readonly SemaphoreSlim mutex;
     private readonly Codec codec;
-    private readonly SocketCancellation cancellation;
+    private readonly SocketTiming cancellation;
     private Connector connector;
 
-    internal WebSocketContext(WebSocket ws, Codec codec, SocketCancellation cancellation) {
+    internal WebSocketContext(WebSocket ws, Codec codec, SocketTiming cancellation) {
         this.ws = ws;
         this.codec = codec;
         this.cancellation = cancellation;
@@ -17,7 +17,7 @@ internal class WebSocketContext : IDisposable {
         mutex = new SemaphoreSlim(1);
     }
 
-    internal WebSocketContext(ClientWebSocket ws, Uri connectTo, Codec codec, SocketCancellation cancellation)
+    internal WebSocketContext(ClientWebSocket ws, Uri connectTo, Codec codec, SocketTiming cancellation)
         : this(ws, codec, cancellation) {
         connector = new Connector(ws, connectTo);
     }

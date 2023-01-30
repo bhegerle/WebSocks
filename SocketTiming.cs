@@ -1,10 +1,10 @@
 ﻿namespace WebStunnel;
 
-internal sealed class SocketCancellation : IDisposable {
+internal sealed class SocketTiming : IDisposable {
     private readonly Config config;
     private readonly CancellationTokenSource cts;
 
-    internal SocketCancellation(Config config, CancellationTokenSource cts) {
+    internal SocketTiming(Config config, CancellationTokenSource cts) {
         this.config = config;
         this.cts = cts;
     }

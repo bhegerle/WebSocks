@@ -13,6 +13,8 @@ internal readonly struct Frame {
     internal int SuffixSize { get; }
     internal ArraySegment<byte> Complete { get; }
 
+    internal int FramedCount => Complete.Count;
+
     internal ArraySegment<byte> Message => Complete[..^SuffixSize];
     internal ArraySegment<byte> Suffix => Complete[^SuffixSize..];
 }

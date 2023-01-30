@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 
 namespace WebStunnel;
 
@@ -64,40 +63,22 @@ internal sealed class SocketMap : IDisposable {
         return newSock;
     }
 
-    internal async Task CancelAll() {
-        List<SocketContext> list;
-
-        await mutex.WaitAsync();
-        try {
-            list = map.Values.ToList();
-        } finally {
-            mutex.Release();
-        }
-
-        foreach (var sc in list)
-            try {
-                await sc.Cancel();
-            } catch (OperationCanceledException) {
-                // ignored
-            }
-    }
-
     internal async Task Apply(Func<SocketContext, Task> receiver, CancellationToken token) {
         var taskMap = new Dictionary<SocketId, Task>();
 
         try {
-            await foreach (var sock in queue.Consume(token)) {
-                taskMap[sock.Id] = X(sock);
-            }
+            await foreach (var sock in queue.Consume(token))
+                taskMap[sock.Id] = WrapReceiver(sock);
         } catch (OperationCanceledException) {
             if (token.IsCancellationRequested)
                 await Task.WhenAll(taskMap.Values);
         }
 
-        async Task X(SocketContext sock) {
+        async Task WrapReceiver(SocketContext sock) {
             try {
                 var rcv = receiver(sock);
                 await rcv.WaitAsync(token);
+                await Task.Delay(ctx.LingerDelay, token);
             } catch (Exception e) {
                 if (!token.IsCancellationRequested)
                     await Log.Warn($"exception receiving from socket", e);

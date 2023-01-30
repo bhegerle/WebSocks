@@ -15,10 +15,10 @@ else
     server = new WebSocketsServer(config);
 
 var srvTask = server.Start(cts.Token);
-var conTask = Control.Transfer(cts);
+var conTask = Control.FromConsole(cts);
 
 try {
-    await Task.WhenAll(conTask, srvTask);
+    await srvTask;
 } catch (OperationCanceledException) {
     // ignored
 } catch (Exception ex) {

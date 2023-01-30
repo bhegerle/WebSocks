@@ -18,11 +18,13 @@ internal class TcpServer : IServer {
     public async Task Start(CancellationToken token) {
         await Log.Write($"tunneling {config.ListenUri} -> {config.TunnelUri}");
 
-        var ctx = new Contextualizer(ProtocolByte.TcpListener, config, token);
-        var sockMap2 = new SocketMap(ctx, CannotConstructSocket);
+        var listener = await CreateListener();
 
-        var at = AcceptLoop(sockMap2, ctx);
-        var tt = Multiplex(sockMap2, ctx);
+        var ctx = new Contextualizer(ProtocolByte.TcpListener, config, token);
+        var sockMap = new SocketMap(ctx, CannotConstructSocket);
+
+        var at = AcceptLoop(listener, sockMap, ctx);
+        var tt = Multiplex(sockMap, ctx);
         await Task.WhenAll(at, tt);
     }
 
@@ -30,16 +32,20 @@ internal class TcpServer : IServer {
         return ValueTask.CompletedTask;
     }
 
-    private async Task AcceptLoop(SocketMap sockMap, Contextualizer ctx) {
+    private async Task<Socket> CreateListener() {
+        var listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
+        listener.Bind(config.ListenUri.EndPoint());
+        listener.Listen();
+
+        await Log.Write($"listening on {listener.LocalEndPoint}");
+
+        return listener;
+    }
+
+    private static async Task AcceptLoop(Socket listener, SocketMap sockMap, Contextualizer ctx) {
         try {
-            using var listener = new Socket(SocketType.Stream, ProtocolType.Tcp);
-            listener.Bind(config.ListenUri.EndPoint());
-            listener.Listen();
-
-            await Log.Write($"listening on {listener.LocalEndPoint}");
-
             while (true) {
-                using var ln=ctx.Link();
+                using var ln = ctx.Link();
                 var s = await listener.AcceptAsync(ln.Token);
 
                 var sctx = ctx.Contextualize(new SocketId(), s);

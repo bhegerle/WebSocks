@@ -3,7 +3,8 @@
 internal enum LogLevel {
     Error,
     Warn,
-    Info
+    Normal,
+    Trace
 }
 
 internal static class Log {
@@ -41,8 +42,8 @@ internal static class Log {
         }
     }
 
-    internal static async Task Write(LogLevel? level, params string[] messages) {
-        var pfx = level != null ? $"{level} ".ToUpper() : null;
+    internal static async Task Write(LogLevel level, params string[] messages) {
+        var pfx = level != LogLevel.Normal ? $"{level} ".ToUpper() : null;
 
         await mutex.WaitAsync();
         try {
@@ -73,11 +74,12 @@ internal static class Log {
     }
 
     internal static async Task Write(params string[] messages) {
-        await Write(null, messages);
+        await Write(LogLevel.Normal, messages);
     }
 
-    internal static async Task Write(string message, Exception e) {
-        await Write(message, ExMsg(e));
+    internal static async Task Trace(params string[] messages) {
+        if (verbose)
+            await Write(LogLevel.Trace, messages);
     }
 
     private static string ExMsg(Exception e) {

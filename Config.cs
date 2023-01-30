@@ -13,8 +13,10 @@ public record Config {
 
     public TimeSpan SendTimeout { get; init; } = TimeSpan.FromSeconds(1);
     public TimeSpan IdleTimeout { get; init; } = TimeSpan.FromMinutes(10);
-    public TimeSpan ReconnectDelay { get; init; } = TimeSpan.FromSeconds(30);
     public TimeSpan ConnectTimeout { get; init; } = TimeSpan.FromSeconds(10);
+
+    public TimeSpan ReconnectDelay { get; init; } = TimeSpan.FromSeconds(30);
+    public TimeSpan LingerDelay { get; init; } = TimeSpan.FromSeconds(2);
 
     internal static async Task<Config> Load(string path) {
         await using var file = new FileStream(path, FileMode.Open, FileAccess.Read);

@@ -25,6 +25,8 @@ internal class Contextualizer {
         }
     }
 
+    internal TimeSpan LingerDelay => config.LingerDelay;
+
     internal CancellationTokenSource Link() {
         return CancellationTokenSource.CreateLinkedTokenSource(crossContextToken);
     }
@@ -51,7 +53,7 @@ internal class Contextualizer {
         return new WebSocketContext(ws, webSocketUri, codec, GetSocketCancellation());
     }
 
-    internal SocketCancellation GetSocketCancellation() {
-        return new SocketCancellation(config, Link());
+    internal SocketTiming GetSocketCancellation() {
+        return new SocketTiming(config, Link());
     }
 }
