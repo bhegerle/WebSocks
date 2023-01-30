@@ -59,6 +59,8 @@ internal static class Multiplexer {
 
             if (msg.Count == 0) {
                 await Log.Write($"exiting socket {sock.Id} receive loop");
+                await sock.Linger
+                await Log.Write($"exiting socket {sock.Id} receive loop");
                 break;
             }
         }

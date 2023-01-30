@@ -25,8 +25,6 @@ internal class Contextualizer {
         }
     }
 
-    internal TimeSpan LingerDelay => config.LingerDelay;
-
     internal CancellationTokenSource Link() {
         return CancellationTokenSource.CreateLinkedTokenSource(crossContextToken);
     }

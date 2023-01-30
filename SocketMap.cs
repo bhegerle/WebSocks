@@ -78,7 +78,6 @@ internal sealed class SocketMap : IDisposable {
             try {
                 var rcv = receiver(sock);
                 await rcv.WaitAsync(token);
-                await Task.Delay(ctx.LingerDelay, token);
             } catch (Exception e) {
                 if (!token.IsCancellationRequested)
                     await Log.Warn($"exception receiving from socket", e);

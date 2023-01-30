@@ -61,6 +61,10 @@ internal sealed class SocketContext : IDisposable {
         }
     }
 
+    internal async Task Linger() {
+        await Task.Delay(sockTime.LingerDelay);
+    }
+
     internal async Task Cancel() {
         await Log.Warn($"socket {Id} cancelled");
         sockTime.Cancel();

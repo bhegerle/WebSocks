@@ -13,6 +13,10 @@ internal sealed class SocketTiming : IDisposable {
         cts.Cancel();
     }
 
+    internal Task LingerDelay() {
+        return Task.Delay(config.LingerDelay, cts.Token);
+    }
+
     internal CancellationTokenSource ConnectTimeout(CancellationToken token) {
         return Timeout(config.ConnectTimeout, token);
     }
