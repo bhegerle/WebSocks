@@ -39,7 +39,10 @@ internal sealed class SocketContext : IDisposable {
         await Check(sendTimeout.Token);
 
         try {
-            await sock.SendAsync(seg, SocketFlags.None, sendTimeout.Token);
+            if (seg.Count > 0)
+                await sock.SendAsync(seg, SocketFlags.None, sendTimeout.Token);
+            else
+                await sock.DisconnectAsync(false, sendTimeout.Token);
         } catch (Exception e) {
             await Log.Warn("socket send exception", e);
             await Cancel();

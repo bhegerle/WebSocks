@@ -95,6 +95,7 @@ internal sealed class SocketMap : IDisposable {
         await mutex.WaitAsync();
         try {
             map.Remove(sock.Id);
+            await Log.Trace($"removed socket {sock.Id}");
         } finally {
             mutex.Release();
         }

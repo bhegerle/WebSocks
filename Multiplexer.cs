@@ -51,7 +51,7 @@ internal static class Multiplexer {
 
             try {
                 await sock.Send(f.Message);
-                await Log.Trace($"sock\tsend {f.Message.Count} to {id}");
+                await Log.Trace($"{id}\tsent {f.Message.Count}");
             } catch (Exception e) {
                 await Log.Warn($"could not send to socket {id}", e);
             }
@@ -66,7 +66,7 @@ internal static class Multiplexer {
 
             try {
                 msg = await sock.Receive(seg);
-                await Log.Trace($"sock\trecv{msg.Count} from {sock.Id}");
+                await Log.Trace($"{sock.Id}\trecv {msg.Count}");
             } catch (Exception e) {
                 await Log.Warn("exception while receiving from socket", e);
                 msg = seg[..0];
@@ -76,7 +76,7 @@ internal static class Multiplexer {
             sock.Id.Write(f.Suffix);
 
             await wsCtx.Send(f.Complete);
-            await Log.Trace($"ws\tsend {f.FramedCount} (w/suffix)");
+            await Log.Trace($"ws\tsent {f.FramedCount} (w/suffix)");
 
             if (msg.Count == 0) {
                 await Log.Write($"exiting socket {sock.Id} receive loop");
@@ -84,9 +84,8 @@ internal static class Multiplexer {
             }
         }
 
-        await Log.Trace($"sock\tstart {sock.Id} linger");
+        await Log.Trace($"{sock.Id}\t{sock.Id} lingering");
         await sock.Linger();
-        await Log.Trace($"sock\tstop {sock.Id} linger");
     }
 
     private static ArraySegment<byte> NewSeg() {
