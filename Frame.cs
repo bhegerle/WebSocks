@@ -1,8 +1,10 @@
 ﻿namespace WebStunnel;
 
 internal readonly struct Frame {
+    private readonly int suffixSize;
+
     internal Frame(ArraySegment<byte> x, int suffixSize, bool extend) {
-        SuffixSize = suffixSize;
+        this.suffixSize = suffixSize;
 
         if (extend)
             x = x.Extend(suffixSize);
@@ -10,11 +12,10 @@ internal readonly struct Frame {
         Complete = x;
     }
 
-    internal int SuffixSize { get; }
     internal ArraySegment<byte> Complete { get; }
 
     internal int FramedCount => Complete.Count;
 
-    internal ArraySegment<byte> Message => Complete[..^SuffixSize];
-    internal ArraySegment<byte> Suffix => Complete[^SuffixSize..];
+    internal ArraySegment<byte> Message => Complete[..^suffixSize];
+    internal ArraySegment<byte> Suffix => Complete[^suffixSize..];
 }

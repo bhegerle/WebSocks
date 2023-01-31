@@ -100,7 +100,6 @@ internal class WebSocketContext : IDisposable {
             await Log.Write("    completed handshake");
         } catch (Exception ex) {
             throw new Exception("handshake failed", ex);
-            throw;
         }
     }
 

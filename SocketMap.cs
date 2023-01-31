@@ -80,7 +80,7 @@ internal sealed class SocketMap : IDisposable {
                 await rcv.WaitAsync(token);
             } catch (Exception e) {
                 if (!token.IsCancellationRequested)
-                    await Log.Warn($"exception receiving from socket", e);
+                    await Log.Warn("exception receiving from socket", e);
             } finally {
                 await Remove(sock);
             }
@@ -97,13 +97,6 @@ internal sealed class SocketMap : IDisposable {
             map.Remove(sock.Id);
         } finally {
             mutex.Release();
-        }
-    }
-
-    private sealed record SocketMapping(SocketContext SocketCtx, bool Add) {
-        public override string ToString() {
-            var a = Add ? "add" : "remove";
-            return $"{a} socket mapping for {SocketCtx.Id}";
         }
     }
 }

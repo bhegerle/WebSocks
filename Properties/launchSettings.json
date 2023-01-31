@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "WebSocks": {
+    "WebStunnel": {
       "commandName": "Project",
       "commandLineArgs": "tcp.json"
     }

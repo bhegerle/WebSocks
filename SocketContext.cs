@@ -62,7 +62,7 @@ internal sealed class SocketContext : IDisposable {
     }
 
     internal async Task Linger() {
-        await Task.Delay(sockTime.LingerDelay);
+        await sockTime.LingerDelay();
     }
 
     internal async Task Cancel() {
