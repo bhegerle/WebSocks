@@ -12,9 +12,6 @@ internal enum CodecState {
 }
 
 internal class Protocol {
-    private const int HashSize = 512 / 8;
-
-    private readonly ArraySegment<byte> key, auth, verify, tmp;
     private readonly ProtocolByte protoByte;
     private readonly char[] keyChars;
 
@@ -120,14 +117,6 @@ internal class Protocol {
 
     private void SetError() {
         State = CodecState.Error;
-    }
-
-    private static byte[] Cat(byte b, ArraySegment<byte> seg0, ArraySegment<byte> seg1) {
-        var cat = new byte[1 + seg0.Count + seg1.Count];
-        cat[0] = b;
-        seg0.CopyTo(cat, 1);
-        seg1.CopyTo(cat, seg0.Count + 1);
-        return cat;
     }
 
     private Codec MakeCipher(ReadOnlySpan<byte> salt) {
