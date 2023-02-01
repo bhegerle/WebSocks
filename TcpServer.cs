@@ -65,7 +65,7 @@ internal class TcpServer : IServer {
 
     private async Task Multiplex(SocketMap sockMap, Contextualizer ctx) {
         try {
-            await Multiplexer.Multiplex(Repeatedly.Invoke(x), sockMap, ctx);
+            await Multiplexer.Multiplex(Repeatedly.Invoke(MakeWebSocket), sockMap, ctx);
         } catch (OperationCanceledException) {
             await Log.Write("cancelled multiplexing");
             throw;
@@ -75,7 +75,7 @@ internal class TcpServer : IServer {
         }
     }
 
-    private ClientWebSocket x() {
+    private ClientWebSocket MakeWebSocket() {
         var ws = new ClientWebSocket();
 
         try {

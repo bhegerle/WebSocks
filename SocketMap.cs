@@ -28,18 +28,6 @@ internal sealed class SocketMap : IDisposable {
         await queue.Enqueue(sock);
     }
 
-    internal async Task<SocketContext> TryGet(SocketId id) {
-        await mutex.WaitAsync();
-        try {
-            if (map.TryGetValue(id, out var sock))
-                return sock;
-            else
-                return null;
-        } finally {
-            mutex.Release();
-        }
-    }
-
     internal async Task<SocketContext> Get(SocketId id) {
         await mutex.WaitAsync();
         try {

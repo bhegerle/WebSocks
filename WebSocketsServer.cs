@@ -24,10 +24,8 @@ internal class WebSocketsServer : IServer {
         app.Use(Handler);
     }
 
-    private Uri TunnelUri => config.TunnelUri;
-
     public async Task Start(CancellationToken token) {
-        await Log.Write($"tunneling {config.ListenUri} -> {TunnelUri}");
+        await Log.Write($"tunneling {config.ListenUri} -> {config.TunnelUri}");
         await app.StartAsync(token);
 
         try {

@@ -3,9 +3,9 @@ using System.Net.WebSockets;
 
 namespace WebStunnel;
 
-public record ProxyConfig {
-    public bool UseSystemProxy { get; init; }
-    public string HttpProxy { get; init; }
+internal record ProxyConfig {
+    internal bool UseSystemProxy { get; init; }
+    internal string HttpProxy { get; init; }
 
     internal void Configure(ClientWebSocket ws, Uri uri) {
         var proxy = TryGetProxy(uri);

@@ -8,7 +8,7 @@ internal sealed class SocketContext : IDisposable {
     private readonly Socket sock;
     private readonly IPEndPoint connectTo;
     private readonly SocketTiming sockTime;
-    private bool connected, readZero;
+    private bool connected;
 
     internal SocketContext(Socket sock, SocketId id, IPEndPoint connectTo, SocketTiming sockTime) {
         this.sock = sock;
@@ -74,7 +74,7 @@ internal sealed class SocketContext : IDisposable {
         await sockTime.LingerDelay();
     }
 
-    internal async Task Cancel() {
+    private async Task Cancel() {
         await Log.Warn($"socket {Id} cancelled");
         sockTime.Cancel();
     }

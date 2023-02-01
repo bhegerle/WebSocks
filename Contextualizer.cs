@@ -29,10 +29,6 @@ internal class Contextualizer {
         return CancellationTokenSource.CreateLinkedTokenSource(crossContextToken);
     }
 
-    internal CancellationTokenSource Link(CancellationToken token) {
-        return CancellationTokenSource.CreateLinkedTokenSource(crossContextToken, token);
-    }
-
     internal IAsyncEnumerable<T> ApplyRateLimit<T>(IEnumerable<T> seq) {
         return seq.RateLimited(config.ReconnectDelay, crossContextToken);
     }
@@ -51,7 +47,7 @@ internal class Contextualizer {
         return new WebSocketContext(ws, webSocketUri, codec, GetSocketCancellation());
     }
 
-    internal SocketTiming GetSocketCancellation() {
+    private SocketTiming GetSocketCancellation() {
         return new SocketTiming(config, Link());
     }
 }

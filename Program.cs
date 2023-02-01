@@ -7,6 +7,7 @@ var config = await Config.Load(args[0]);
 await Log.Configure(config);
 
 using var cts = new CancellationTokenSource();
+Control.FromConsole(cts);
 
 IServer server;
 if (config.ListenUri.Scheme == "tcp")
@@ -15,7 +16,6 @@ else
     server = new WebSocketsServer(config);
 
 var srvTask = server.Start(cts.Token);
-var conTask = Control.FromConsole(cts);
 
 try {
     await srvTask;

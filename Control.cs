@@ -8,7 +8,7 @@ internal static class Control {
         exitTimer = new Timer(_ => ExitNow(), null, Timeout.Infinite, Timeout.Infinite);
     }
 
-    internal static async Task FromConsole(CancellationTokenSource cts) {
+    internal static async void FromConsole(CancellationTokenSource cts) {
         Console.CancelKeyPress += (_, evt) => {
             if (Interlocked.Increment(ref cancelCount) == 1) {
                 cts.Cancel();
