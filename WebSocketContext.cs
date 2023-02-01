@@ -22,13 +22,14 @@ internal class WebSocketContext : IDisposable {
         connector = new Connector(ws, connectTo);
     }
 
-    internal async Task Send(ArraySegment<byte> seg) {
+    internal async Task Send(ArraySegment<byte> seg, SocketId id) {
         using var sendTimeout = cancellation.IdleTimeout();
         await Check(sendTimeout.Token);
 
         try {
-            seg = codec.AuthMessage(seg);
+            seg = codec.AuthMessage(seg, id.Value);
             await WsSend(seg, sendTimeout.Token);
+            await Log.Trace($"ws\tsend {seg.Count} (w/suffix)");
         } catch (Exception e) {
             await Log.Warn("websocket send exception", e);
             await Cancel();
@@ -36,20 +37,20 @@ internal class WebSocketContext : IDisposable {
         }
     }
 
-    internal async Task<ArraySegment<byte>> Receive(ArraySegment<byte> seg) {
+    internal async Task<(ArraySegment<byte>, SocketId)> Receive(ArraySegment<byte> seg) {
         using var recvTimeout = cancellation.IdleTimeout();
         await Check(recvTimeout.Token);
 
         try {
             seg = await WsRecv(seg, recvTimeout.Token);
-            seg = codec.VerifyMessage(seg);
+            await Log.Trace($"ws\trecv {seg.Count} (w/suffix)");
+            var (payload, id) = codec.VerifyMessage(seg);
+            return (payload, new SocketId(id));
         } catch (Exception e) {
             await Log.Warn("websocket receive exception", e);
             await Cancel();
             throw;
         }
-
-        return seg;
     }
 
     internal async Task Cancel() {

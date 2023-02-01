@@ -29,17 +29,14 @@ internal static class Multiplexer {
 
         while (true) {
             ArraySegment<byte> msg;
+            SocketId id;
 
             try {
-                msg = await wsCtx.Receive(seg);
-                await Log.Trace($"ws\trecv {msg.Count} (w/suffix)");
+                (msg, id) = await wsCtx.Receive(seg);
             } catch (Exception e) {
                 await Log.Warn("exception while receiving from WebSocket", e);
                 break;
             }
-
-            var f = new Frame(msg, SocketId.Size, false);
-            var id = new SocketId(f.Suffix);
 
             SocketContext sock;
             try {
@@ -50,8 +47,7 @@ internal static class Multiplexer {
             }
 
             try {
-                await sock.Send(f.Message);
-                await Log.Trace($"{id}\tsent {f.Message.Count}");
+                await sock.Send(msg);
             } catch (Exception e) {
                 await Log.Warn($"could not send to socket {id}", e);
             }
@@ -66,17 +62,12 @@ internal static class Multiplexer {
 
             try {
                 msg = await sock.Receive(seg);
-                await Log.Trace($"{sock.Id}\trecv {msg.Count}");
             } catch (Exception e) {
                 await Log.Warn("exception while receiving from socket", e);
                 msg = seg[..0];
             }
 
-            var f = new Frame(msg, SocketId.Size, true);
-            sock.Id.Write(f.Suffix);
-
-            await wsCtx.Send(f.Complete);
-            await Log.Trace($"ws\tsent {f.FramedCount} (w/suffix)");
+            await wsCtx.Send(msg, sock.Id);
 
             if (msg.Count == 0) {
                 await Log.Write($"exiting socket {sock.Id} receive loop");

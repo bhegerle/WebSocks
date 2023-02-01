@@ -39,10 +39,14 @@ internal sealed class SocketContext : IDisposable {
         await Check(sendTimeout.Token);
 
         try {
-            if (seg.Count > 0)
+            if (seg.Count > 0) {
                 await sock.SendAsync(seg, SocketFlags.None, sendTimeout.Token);
-            else
+                await Log.Trace($"sock\tsend {seg.Count}");
+
+            } else {
                 await sock.DisconnectAsync(false, sendTimeout.Token);
+                await Log.Trace($"sock\tdisconnected");
+            }
         } catch (Exception e) {
             await Log.Warn("socket send exception", e);
             await Cancel();
@@ -56,7 +60,9 @@ internal sealed class SocketContext : IDisposable {
 
         try {
             var n = await sock.ReceiveAsync(seg, SocketFlags.None, recvTimeout.Token);
-            return seg[..n];
+            seg = seg[..n];
+            await Log.Trace($"sock\trecv {seg.Count}");
+            return seg;
         } catch (Exception e) {
             await Log.Warn("socket receive exception", e);
             await Cancel();

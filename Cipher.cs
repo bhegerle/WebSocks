@@ -19,21 +19,23 @@ internal class Cipher {
     }
 
     internal void Tag(ReadOnlySpan<byte> assocData, Span<byte> tag) {
-        Encrypt(Span<byte>.Empty, assocData, Span<byte>.Empty, tag);
+        UpdateNonce();
+        aes.Encrypt(nonce, default, default, tag, assocData);
     }
 
     internal void VerifyTag(ReadOnlySpan<byte> assocData, Span<byte> tag) {
-        Decrypt(Span<byte>.Empty, tag, assocData, Span<byte>.Empty);
+        UpdateNonce();
+        aes.Decrypt(nonce, default, tag, default, assocData);
     }
 
-    internal void Encrypt(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> assocData, Span<byte> ciphertext, Span<byte> tag) {
+    internal void Encrypt(Span<byte> buffer, Span<byte> tag) {
         UpdateNonce();
-        aes.Encrypt(nonce, plaintext, ciphertext, tag, assocData);
+        aes.Encrypt(nonce, buffer, buffer, tag);
     }
 
-    internal void Decrypt(ReadOnlySpan<byte> ciphertext, ReadOnlySpan<byte> tag, ReadOnlySpan<byte> assocData, Span<byte> plaintext) {
+    internal void Decrypt(Span<byte> buffer, ReadOnlySpan<byte> tag) {
         UpdateNonce();
-        aes.Decrypt(nonce, ciphertext, tag, plaintext, assocData);
+        aes.Decrypt(nonce, buffer, tag, buffer);
     }
 
     private void UpdateNonce() {

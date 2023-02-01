@@ -40,9 +40,9 @@ internal class Codec {
             init = new byte[Message.Init.MessageSize];
 
             var msg = new Message.Init(init);
-            RandomNumberGenerator.Fill(msg.SaltPair.Buffer);
-            RandomNumberGenerator.Fill(msg.Tagged.Salt);
-            MakeCipher(msg.Tagged.Salt).Tag(msg.Tagged.Content, msg.Tagged.Tag);
+            RandomNumberGenerator.Fill(msg.Plaintext);
+            RandomNumberGenerator.Fill(msg.InitSalt);
+            MakeCipher(msg.InitSalt).Tag(msg.Plaintext, msg.Tag);
 
             Transition(CodecState.Init, CodecState.Handshake);
 
@@ -60,7 +60,7 @@ internal class Codec {
 
             var thatMsg = new Message.Init(vseg);
 
-            MakeCipher(thatMsg.Tagged.Salt).VerifyTag(thatMsg.Tagged.Content, thatMsg.Tagged.Tag);
+            MakeCipher(thatMsg.InitSalt).VerifyTag(thatMsg.Plaintext, thatMsg.Tag);
 
             var thisMsg = new Message.Init(init);
             if (protoByte == ProtocolByte.WsListener)
@@ -75,48 +75,37 @@ internal class Codec {
         }
     }
 
-    internal ArraySegment<byte> AuthMessage(ArraySegment<byte> seg) {
+    internal ArraySegment<byte> AuthMessage(ArraySegment<byte> seg, uint id) {
         try {
             CheckState(CodecState.Active);
-            return AuthMsg(seg);
+
+            var ext = seg.Extend(Message.Data.SuffixSize);
+
+            var msg = new Message.Data(ext);
+            msg.Id = id;
+
+            enc.Encrypt(msg.Text, msg.Tag);
+
+            return ext;
         } catch {
             SetError();
             throw;
         }
     }
 
-    internal ArraySegment<byte> VerifyMessage(ArraySegment<byte> seg) {
+    internal (ArraySegment<byte>, uint) VerifyMessage(ArraySegment<byte> seg) {
         try {
             CheckState(CodecState.Active);
-            return VerifyMsg(seg);
+
+            var msg = new Message.Data(seg);
+
+            dec.Decrypt(msg.Text, msg.Tag);
+
+            return (msg.Payload, msg.Id);
         } catch {
             SetError();
             throw;
         }
-    }
-
-    private ArraySegment<byte> AuthMsg(ArraySegment<byte> seg) {
-        var msg = new Frame(seg, HashSize, true);
-
-        auth.CopyTo(msg.Suffix);
-        HashData(key, msg.Complete, auth);
-
-        auth.CopyTo(msg.Suffix);
-
-        return msg.Complete;
-    }
-
-    private ArraySegment<byte> VerifyMsg(ArraySegment<byte> seg) {
-        var msg = new Frame(seg, HashSize, false);
-
-        msg.Suffix.CopyTo(tmp);
-        verify.CopyTo(msg.Suffix);
-        HashData(key, msg.Complete, verify);
-
-        if (!Utils.ConjEqual(verify, tmp))
-            throw new Exception("invalid HMAC");
-
-        return msg.Message;
     }
 
     private void CheckState(CodecState expected) {
@@ -153,8 +142,8 @@ internal class Codec {
     }
 
     private (Cipher, Cipher) MakeCiphers(Message.Init w, Message.Init t) {
-        var c0 = MakeCipher(w.SaltPair.WriterSalt, t.SaltPair.ReaderSalt);
-        var c1 = MakeCipher(w.SaltPair.ReaderSalt, t.SaltPair.WriterSalt);
+        var c0 = MakeCipher(w.WriterSalt, t.ReaderSalt);
+        var c1 = MakeCipher(w.ReaderSalt, t.WriterSalt);
         return (c0, c1);
     }
 }
