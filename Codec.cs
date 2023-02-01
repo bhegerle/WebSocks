@@ -13,55 +13,62 @@ internal enum CodecState {
 
 internal class Codec {
     private const int HashSize = 512 / 8;
+
     private readonly ArraySegment<byte> key, auth, verify, tmp;
-    private readonly byte protoByte;
+    private readonly ProtocolByte protoByte;
+    private readonly char[] keyChars;
+
+    private byte[] init;
+    private Cipher enc, dec;
 
     internal Codec(ProtocolByte protoByte, Config config) {
         if (string.IsNullOrEmpty(config.Key))
             throw new Exception("key required");
 
-        this.protoByte = (byte)protoByte;
+        this.protoByte = protoByte;
 
-        key = SHA512.HashData(Encoding.UTF8.GetBytes(config.Key));
-
-        auth = new byte[HashSize];
-        verify = new byte[HashSize];
-        tmp = new byte[HashSize];
+        keyChars = config.Key.ToArray();
 
         State = CodecState.Init;
     }
 
     internal CodecState State { get; private set; }
-    internal static int InitMessageSize => HashSize;
+    internal static int InitMessageSize => Message.Init.MessageSize;
 
-    internal ArraySegment<byte> InitHandshake(ArraySegment<byte> seg) {
+    internal ArraySegment<byte> InitHandshake() {
         try {
+            init = new byte[Message.Init.MessageSize];
+
+            var msg = new Message.Init(init);
+            RandomNumberGenerator.Fill(msg.SaltPair.Buffer);
+            RandomNumberGenerator.Fill(msg.Tagged.Salt);
+            MakeCipher(msg.Tagged.Salt).Tag(msg.Tagged.Content, msg.Tagged.Tag);
+
             Transition(CodecState.Init, CodecState.Handshake);
 
-            using var rng = RandomNumberGenerator.Create();
-
-            seg = seg[..InitMessageSize];
-            rng.GetBytes(seg);
-
-            return seg;
+            return init;
         } catch {
             SetError();
             throw;
         }
     }
 
-    internal void VerifyHandshake(ArraySegment<byte> seg) {
+    internal void VerifyHandshake(ArraySegment<byte> vseg) {
         try {
-            Transition(CodecState.Handshake, CodecState.Active);
-
-            if (seg.Count != InitMessageSize)
+            if (vseg.Count != InitMessageSize)
                 throw new Exception("wrong size for init handshake message");
 
-            var acat = Cat(protoByte, auth, verify);
-            var vcat = Cat((byte)~protoByte, verify, auth);
+            var thatMsg = new Message.Init(vseg);
 
-            HashData(key, acat, auth);
-            HashData(key, vcat, verify);
+            MakeCipher(thatMsg.Tagged.Salt).VerifyTag(thatMsg.Tagged.Content, thatMsg.Tagged.Tag);
+
+            var thisMsg = new Message.Init(init);
+            if (protoByte == ProtocolByte.WsListener)
+                (enc, dec) = MakeCiphers(thisMsg, thatMsg);
+            else
+                (dec, enc) = MakeCiphers(thatMsg, thisMsg);
+
+            Transition(CodecState.Handshake, CodecState.Active);
         } catch {
             SetError();
             throw;
@@ -132,5 +139,22 @@ internal class Codec {
         seg0.CopyTo(cat, 1);
         seg1.CopyTo(cat, seg0.Count + 1);
         return cat;
+    }
+
+    private Cipher MakeCipher(ReadOnlySpan<byte> salt) {
+        return new Cipher(keyChars, salt);
+    }
+
+    private Cipher MakeCipher(ReadOnlySpan<byte> salt0, ReadOnlySpan<byte> salt1) {
+        var cat = new byte[salt0.Length + salt1.Length];
+        salt0.CopyTo(cat);
+        salt1.CopyTo(cat.AsSpan()[salt0.Length..]);
+        return MakeCipher(cat);
+    }
+
+    private (Cipher, Cipher) MakeCiphers(Message.Init w, Message.Init t) {
+        var c0 = MakeCipher(w.SaltPair.WriterSalt, t.SaltPair.ReaderSalt);
+        var c1 = MakeCipher(w.SaltPair.ReaderSalt, t.SaltPair.WriterSalt);
+        return (c0, c1);
     }
 }

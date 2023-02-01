@@ -90,10 +90,10 @@ internal class WebSocketContext : IDisposable {
         try {
             await Log.Write("    init handshake");
 
-            var seg = new byte[Codec.InitMessageSize];
-            var sendSeg = codec.InitHandshake(seg);
+            var sendSeg = codec.InitHandshake();
             await WsSend(sendSeg, token);
 
+            var seg = new byte[Codec.InitMessageSize];
             var recvSeg = await WsRecv(seg, token);
             codec.VerifyHandshake(recvSeg);
 
