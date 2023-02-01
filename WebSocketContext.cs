@@ -5,11 +5,11 @@ namespace WebStunnel;
 internal class WebSocketContext : IDisposable {
     private readonly WebSocket ws;
     private readonly SemaphoreSlim mutex;
-    private readonly Codec codec;
+    private readonly Protocol codec;
     private readonly SocketTiming cancellation;
     private Connector connector;
 
-    internal WebSocketContext(WebSocket ws, Codec codec, SocketTiming cancellation) {
+    internal WebSocketContext(WebSocket ws, Protocol codec, SocketTiming cancellation) {
         this.ws = ws;
         this.codec = codec;
         this.cancellation = cancellation;
@@ -17,7 +17,7 @@ internal class WebSocketContext : IDisposable {
         mutex = new SemaphoreSlim(1);
     }
 
-    internal WebSocketContext(ClientWebSocket ws, Uri connectTo, Codec codec, SocketTiming cancellation)
+    internal WebSocketContext(ClientWebSocket ws, Uri connectTo, Protocol codec, SocketTiming cancellation)
         : this(ws, codec, cancellation) {
         connector = new Connector(ws, connectTo);
     }
@@ -94,7 +94,7 @@ internal class WebSocketContext : IDisposable {
             var sendSeg = codec.InitHandshake();
             await WsSend(sendSeg, token);
 
-            var seg = new byte[Codec.InitMessageSize];
+            var seg = new byte[Protocol.InitMessageSize];
             var recvSeg = await WsRecv(seg, token);
             codec.VerifyHandshake(recvSeg);
 

@@ -42,12 +42,12 @@ internal class Contextualizer {
     }
 
     internal WebSocketContext Contextualize(WebSocket ws) {
-        var codec = new Codec(protoByte, config);
+        var codec = new Protocol(protoByte, config);
         return new WebSocketContext(ws, codec, GetSocketCancellation());
     }
 
     internal WebSocketContext Contextualize(ClientWebSocket ws) {
-        var codec = new Codec(protoByte, config);
+        var codec = new Protocol(protoByte, config);
         return new WebSocketContext(ws, webSocketUri, codec, GetSocketCancellation());
     }
 

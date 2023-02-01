@@ -1,149 +1,45 @@
 ﻿using System.Security.Cryptography;
-using System.Text;
-using static System.Security.Cryptography.HMACSHA512;
 
 namespace WebStunnel;
 
-internal enum CodecState {
-    Init,
-    Handshake,
-    Active,
-    Error
-}
-
 internal class Codec {
-    private const int HashSize = 512 / 8;
+    private const int keyBytes = 32;
+    private const int iterations = 1_000_000;
+    private static readonly HashAlgorithmName hashAlgo = HashAlgorithmName.SHA512;
 
-    private readonly ArraySegment<byte> key, auth, verify, tmp;
-    private readonly ProtocolByte protoByte;
-    private readonly char[] keyChars;
+    private readonly AesGcm aes;
+    private readonly byte[] nonce;
 
-    private byte[] init;
-    private Cipher enc, dec;
+    private ulong counter;
 
-    internal Codec(ProtocolByte protoByte, Config config) {
-        if (string.IsNullOrEmpty(config.Key))
-            throw new Exception("key required");
-
-        this.protoByte = protoByte;
-
-        keyChars = config.Key.ToArray();
-
-        State = CodecState.Init;
+    internal Codec(Span<char> key, ReadOnlySpan<byte> salt) {
+        var dkey = Rfc2898DeriveBytes.Pbkdf2(key, salt, iterations, hashAlgo, keyBytes);
+        aes = new AesGcm(dkey);
+        nonce = new byte[AesGcm.NonceByteSizes.MaxSize];
     }
 
-    internal CodecState State { get; private set; }
-    internal static int InitMessageSize => Message.Init.MessageSize;
-
-    internal ArraySegment<byte> InitHandshake() {
-        try {
-            init = new byte[Message.Init.MessageSize];
-
-            var msg = new Message.Init(init);
-            RandomNumberGenerator.Fill(msg.Plaintext);
-            RandomNumberGenerator.Fill(msg.InitSalt);
-            MakeCipher(msg.InitSalt).Tag(msg.Plaintext, msg.Tag);
-
-            Transition(CodecState.Init, CodecState.Handshake);
-
-            return init;
-        } catch {
-            SetError();
-            throw;
-        }
+    internal void Tag(ReadOnlySpan<byte> assocData, Span<byte> tag) {
+        UpdateNonce();
+        aes.Encrypt(nonce, default, default, tag, assocData);
     }
 
-    internal void VerifyHandshake(ArraySegment<byte> vseg) {
-        try {
-            if (vseg.Count != InitMessageSize)
-                throw new Exception("wrong size for init handshake message");
-
-            var thatMsg = new Message.Init(vseg);
-
-            MakeCipher(thatMsg.InitSalt).VerifyTag(thatMsg.Plaintext, thatMsg.Tag);
-
-            var thisMsg = new Message.Init(init);
-            if (protoByte == ProtocolByte.WsListener)
-                (enc, dec) = MakeCiphers(thisMsg, thatMsg);
-            else
-                (dec, enc) = MakeCiphers(thatMsg, thisMsg);
-
-            Transition(CodecState.Handshake, CodecState.Active);
-        } catch {
-            SetError();
-            throw;
-        }
+    internal void VerifyTag(ReadOnlySpan<byte> assocData, Span<byte> tag) {
+        UpdateNonce();
+        aes.Decrypt(nonce, default, tag, default, assocData);
     }
 
-    internal ArraySegment<byte> AuthMessage(ArraySegment<byte> seg, uint id) {
-        try {
-            CheckState(CodecState.Active);
-
-            var ext = seg.Extend(Message.Data.SuffixSize);
-
-            var msg = new Message.Data(ext);
-            msg.Id = id;
-
-            enc.Encrypt(msg.Text, msg.Tag);
-
-            return ext;
-        } catch {
-            SetError();
-            throw;
-        }
+    internal void Encrypt(Span<byte> buffer, Span<byte> tag) {
+        UpdateNonce();
+        aes.Encrypt(nonce, buffer, buffer, tag);
     }
 
-    internal (ArraySegment<byte>, uint) VerifyMessage(ArraySegment<byte> seg) {
-        try {
-            CheckState(CodecState.Active);
-
-            var msg = new Message.Data(seg);
-
-            dec.Decrypt(msg.Text, msg.Tag);
-
-            return (msg.Payload, msg.Id);
-        } catch {
-            SetError();
-            throw;
-        }
+    internal void Decrypt(Span<byte> buffer, ReadOnlySpan<byte> tag) {
+        UpdateNonce();
+        aes.Decrypt(nonce, buffer, tag, buffer);
     }
 
-    private void CheckState(CodecState expected) {
-        if (State != expected)
-            throw new Exception("invalid codec state");
-    }
-
-    private void Transition(CodecState expected, CodecState next) {
-        CheckState(expected);
-        State = next;
-    }
-
-    private void SetError() {
-        State = CodecState.Error;
-    }
-
-    private static byte[] Cat(byte b, ArraySegment<byte> seg0, ArraySegment<byte> seg1) {
-        var cat = new byte[1 + seg0.Count + seg1.Count];
-        cat[0] = b;
-        seg0.CopyTo(cat, 1);
-        seg1.CopyTo(cat, seg0.Count + 1);
-        return cat;
-    }
-
-    private Cipher MakeCipher(ReadOnlySpan<byte> salt) {
-        return new Cipher(keyChars, salt);
-    }
-
-    private Cipher MakeCipher(ReadOnlySpan<byte> salt0, ReadOnlySpan<byte> salt1) {
-        var cat = new byte[salt0.Length + salt1.Length];
-        salt0.CopyTo(cat);
-        salt1.CopyTo(cat.AsSpan()[salt0.Length..]);
-        return MakeCipher(cat);
-    }
-
-    private (Cipher, Cipher) MakeCiphers(Message.Init w, Message.Init t) {
-        var c0 = MakeCipher(w.WriterSalt, t.ReaderSalt);
-        var c1 = MakeCipher(w.ReaderSalt, t.WriterSalt);
-        return (c0, c1);
+    private void UpdateNonce() {
+        BitConverter.TryWriteBytes(nonce, counter);
+        counter++;
     }
 }
