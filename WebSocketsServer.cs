@@ -60,17 +60,11 @@ internal class WebSocketsServer : IServer {
             var ws = await httpCtx.WebSockets.AcceptWebSocketAsync();
             await Log.Write("accepted WebSocket");
 
-            var ctx = new Contextualizer(ProtocolByte.WsListener, config, cts.Token);
-            using var sockMap = new SocketMap(ctx, ConstructSocket);
-
-            await Multiplexer.Multiplex(ws, sockMap, ctx);
+            using var ctx = new Contextualizer(Side.WsListener, config, cts.Token);
+            await Multiplexer.Multiplex(ws, ctx);
         } else {
             await Log.Warn("not WebSocket");
             httpCtx.Response.StatusCode = StatusCodes.Status400BadRequest;
         }
-    }
-
-    private static Socket ConstructSocket() {
-        return new Socket(SocketType.Stream, ProtocolType.Tcp);
     }
 }

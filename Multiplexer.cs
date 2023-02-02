@@ -3,28 +3,40 @@
 namespace WebStunnel;
 
 internal static class Multiplexer {
-    internal static async Task Multiplex(WebSocket ws, SocketMap sockMap, Contextualizer ctx) {
-        await Multiplex(sockMap, ctx, ctx.Contextualize(ws));
+    // problem that WebSocket contextualized here, and not lower in loop
+    internal static async Task Multiplex(WebSocket ws, Contextualizer ctx) {
+        using var sockMap = new SocketMap();
+        await Multiplex(sockMap, ctx, subCtx => subCtx.Contextualize(ws));
     }
 
     internal static async Task Multiplex(IEnumerable<ClientWebSocket> wsSeq, SocketMap sockMap, Contextualizer ctx) {
-        await foreach (var ws in ctx.ApplyRateLimit(wsSeq))
-            await Multiplex(sockMap, ctx, ctx.Contextualize(ws));
-    }
-
-    private static async Task Multiplex(SocketMap sockMap, Contextualizer ctx, WebSocketContext wsCtx) {
-        using var ln = ctx.Link();
-        var recvAll = sockMap.Apply(s => SocketReceive(s, wsCtx), ln.Token);
-
         try {
-            await WebSocketReceive(wsCtx, sockMap);
+            await foreach (var ws in ctx.ApplyRateLimit(wsSeq)) {
+                await Multiplex(sockMap, ctx, subCtx => subCtx.Contextualize(ws));
+            }
         } finally {
-            ln.Cancel();
-            await recvAll;
+            await Log.Trace("exiting multiplex loop");
         }
     }
 
-    private static async Task WebSocketReceive(WebSocketContext wsCtx, SocketMap sockMap) {
+    private static async Task Multiplex(SocketMap sockMap, Contextualizer ctx, Func<Contextualizer, WebSocketContext> cons) {
+        using var c = new CancellationTokenSource();
+        using var subCtx = ctx.Subcontext(c.Token);
+
+        using var wsCtx = cons(subCtx);
+
+        var recvAll = sockMap.Apply(s => SocketReceive(s, wsCtx), subCtx.Token);
+
+        try {
+            await WebSocketReceive(wsCtx, sockMap, subCtx);
+        } finally {
+            c.Cancel();
+            await recvAll;
+            await Log.Trace("exiting ws recv");
+        }
+    }
+
+    private static async Task WebSocketReceive(WebSocketContext wsCtx, SocketMap sockMap, Contextualizer ctx) {
         var seg = NewSeg();
 
         while (true) {
@@ -38,9 +50,12 @@ internal static class Multiplexer {
                 break;
             }
 
-            SocketContext sock;
+            var sock = await sockMap.TryGet(id);
             try {
-                sock = await sockMap.Get(id);
+                if (sock == null) {
+                    sock = ctx.Contextualize(id);
+                    await sockMap.Add(sock);
+                }
             } catch (Exception e) {
                 await Log.Warn($"could not get socket {id}", e);
                 continue;
@@ -56,6 +71,8 @@ internal static class Multiplexer {
 
     private static async Task SocketReceive(SocketContext sock, WebSocketContext wsCtx) {
         var seg = NewSeg();
+
+        await Log.Write($"starting socket {sock.Id}");
 
         while (true) {
             ArraySegment<byte> msg;

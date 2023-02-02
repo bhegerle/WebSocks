@@ -14,7 +14,6 @@ internal sealed class SocketContext : IDisposable {
         this.sock = sock;
         this.connectTo = connectTo;
         this.sockTime = sockTime;
-
         Id = id;
 
         mutex = new SemaphoreSlim(1);
@@ -41,11 +40,11 @@ internal sealed class SocketContext : IDisposable {
         try {
             if (seg.Count > 0) {
                 await sock.SendAsync(seg, SocketFlags.None, sendTimeout.Token);
-                await Log.Trace($"sock\tsend {seg.Count}");
+                await Log.Trace($"{Id}\tsend {seg.Count}");
 
             } else {
                 await sock.DisconnectAsync(false, sendTimeout.Token);
-                await Log.Trace($"sock\tdisconnected");
+                await Log.Trace($"{Id}\tdisconnected");
             }
         } catch (Exception e) {
             await Log.Warn("socket send exception", e);
@@ -61,7 +60,7 @@ internal sealed class SocketContext : IDisposable {
         try {
             var n = await sock.ReceiveAsync(seg, SocketFlags.None, recvTimeout.Token);
             seg = seg[..n];
-            await Log.Trace($"sock\trecv {seg.Count}");
+            await Log.Trace($"{Id}\trecv {seg.Count}");
             return seg;
         } catch (Exception e) {
             await Log.Warn("socket receive exception", e);

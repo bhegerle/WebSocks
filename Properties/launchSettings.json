@@ -2,7 +2,7 @@
   "profiles": {
     "WebStunnel": {
       "commandName": "Project",
-      "commandLineArgs": "tcp.json"
+      "commandLineArgs": "ws.json"
     }
   }
 }

@@ -18,13 +18,14 @@ internal class TcpServer : IServer {
     public async Task Start(CancellationToken token) {
         await Log.Write($"tunneling {config.ListenUri} -> {config.TunnelUri}");
 
-        var listener = await CreateListener();
+        using var listener = await CreateListener();
 
-        var ctx = new Contextualizer(ProtocolByte.TcpListener, config, token);
-        var sockMap = new SocketMap(ctx, CannotConstructSocket);
+        using var ctx = new Contextualizer(Side.TcpListener, config, token);
+        using var sockMap = new SocketMap();
 
         var at = AcceptLoop(listener, sockMap, ctx);
         var tt = Multiplex(sockMap, ctx);
+
         await Task.WhenAll(at, tt);
     }
 
@@ -45,18 +46,15 @@ internal class TcpServer : IServer {
     private static async Task AcceptLoop(Socket listener, SocketMap sockMap, Contextualizer ctx) {
         try {
             while (true) {
-                using var ln = ctx.Link();
-                var s = await listener.AcceptAsync(ln.Token);
+                await Log.Write("awaiting");
+                var s = await listener.AcceptAsync(ctx.Token);
 
-                var sctx = ctx.Contextualize(new SocketId(), s);
+                var sctx = ctx.Contextualize(s);
 
                 await Log.Write($"accepted connection {sctx.Id} from {s.RemoteEndPoint}");
 
                 await sockMap.Add(sctx);
             }
-        } catch (OperationCanceledException) {
-            await Log.Write("cancelled socket accept");
-            throw;
         } catch (Exception e) {
             await Log.Warn("unexpected socket accept exception", e);
             throw;
@@ -85,9 +83,5 @@ internal class TcpServer : IServer {
         }
 
         return ws;
-    }
-
-    private static Socket CannotConstructSocket() {
-        throw new Exception("cannot construct socket");
     }
 }

@@ -14,13 +14,6 @@ public record ProxyConfig {
             ws.Options.Proxy = proxy;
     }
 
-    internal void Configure(HttpClientHandler clientHandler, Uri uri) {
-        var proxy = TryGetProxy(uri);
-
-        if (proxy != null)
-            clientHandler.Proxy = proxy;
-    }
-
     private WebProxy TryGetProxy(Uri uri) {
         if (UseSystemProxy) {
             var proxyUri = WebRequest.GetSystemWebProxy().GetProxy(uri);

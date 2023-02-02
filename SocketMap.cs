@@ -1,17 +1,11 @@
-﻿using System.Net.Sockets;
-
-namespace WebStunnel;
+﻿namespace WebStunnel;
 
 internal sealed class SocketMap : IDisposable {
-    private readonly Contextualizer ctx;
-    private readonly Func<Socket> socketCon;
     private readonly SemaphoreSlim mutex;
-    private readonly IDictionary<SocketId, SocketContext> map;
+    private readonly Dictionary<SocketId, SocketContext> map;
     private readonly AsyncQueue<SocketContext> queue;
 
-    internal SocketMap(Contextualizer ctx, Func<Socket> socketCon) {
-        this.ctx = ctx;
-        this.socketCon = socketCon;
+    internal SocketMap() {
         mutex = new SemaphoreSlim(1);
         map = new Dictionary<SocketId, SocketContext>();
         queue = new AsyncQueue<SocketContext>();
@@ -28,27 +22,16 @@ internal sealed class SocketMap : IDisposable {
         await queue.Enqueue(sock);
     }
 
-    internal async Task<SocketContext> Get(SocketId id) {
+    internal async Task<SocketContext> TryGet(SocketId id) {
         await mutex.WaitAsync();
         try {
             if (map.TryGetValue(id, out var sock))
                 return sock;
+            else
+                return null;
         } finally {
             mutex.Release();
         }
-
-        var newSock = ctx.Contextualize(id, socketCon());
-
-        await mutex.WaitAsync();
-        try {
-            map.Add(id, newSock);
-        } finally {
-            mutex.Release();
-        }
-
-        await queue.Enqueue(newSock);
-
-        return newSock;
     }
 
     internal async Task Apply(Func<SocketContext, Task> receiver, CancellationToken token) {
@@ -77,6 +60,7 @@ internal sealed class SocketMap : IDisposable {
 
     public void Dispose() {
         queue.Dispose();
+        mutex.Dispose();
     }
 
     private async Task Remove(SocketContext sock) {

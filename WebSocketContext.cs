@@ -53,7 +53,7 @@ internal class WebSocketContext : IDisposable {
         }
     }
 
-    internal async Task Cancel() {
+    private async Task Cancel() {
         await Log.Warn($"websocket cancelled");
         cancellation.Cancel();
     }

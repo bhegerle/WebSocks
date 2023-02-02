@@ -4,19 +4,22 @@ using System.Net.WebSockets;
 
 namespace WebStunnel;
 
-internal class Contextualizer {
-    private readonly ProtocolByte protoByte;
+internal class Contextualizer : IDisposable {
+    private readonly Side side;
     private readonly Config config;
     private readonly IPEndPoint socketEndPoint;
     private readonly Uri webSocketUri;
-    private readonly CancellationToken crossContextToken;
+    private readonly CancellationTokenSource cts;
 
-    internal Contextualizer(ProtocolByte protoByte, Config config, CancellationToken crossContextToken) {
-        this.protoByte = protoByte;
+    internal Contextualizer(Side side, Config config, CancellationToken token)
+        : this(side, config, CancellationTokenSource.CreateLinkedTokenSource(token)) { }
+
+    internal Contextualizer(Side side, Config config, CancellationTokenSource cts) {
+        this.side = side;
         this.config = config;
-        this.crossContextToken = crossContextToken;
+        this.cts = cts;
 
-        if (protoByte == ProtocolByte.WsListener) {
+        if (side == Side.WsListener) {
             config.TunnelUri.CheckUri("socket endpoint", "tcp");
             socketEndPoint = config.TunnelUri.EndPoint();
         } else {
@@ -25,29 +28,46 @@ internal class Contextualizer {
         }
     }
 
-    internal CancellationTokenSource Link() {
-        return CancellationTokenSource.CreateLinkedTokenSource(crossContextToken);
+    internal CancellationToken Token => cts.Token;
+
+    internal Contextualizer Subcontext(CancellationToken token) {
+        var ln = CancellationTokenSource.CreateLinkedTokenSource(Token, token);
+        return new Contextualizer(side, config, ln);
     }
 
     internal IAsyncEnumerable<T> ApplyRateLimit<T>(IEnumerable<T> seq) {
-        return seq.RateLimited(config.ReconnectDelay, crossContextToken);
+        return seq.RateLimited(config.ReconnectDelay, Token);
     }
 
-    internal SocketContext Contextualize(SocketId id, Socket s) {
-        return new SocketContext(s, id, socketEndPoint, GetSocketCancellation());
+    internal SocketContext Contextualize(Socket s) {
+        var id = new SocketId();
+        return new SocketContext(s, id, null, GetSocketTiming());
+    }
+
+    internal SocketContext Contextualize(SocketId id) {
+        if (socketEndPoint == null)
+            throw new Exception("not configured for socket autoconnect");
+
+        var s = new Socket(SocketType.Stream, ProtocolType.Tcp);
+        return new SocketContext(s, id, socketEndPoint, GetSocketTiming());
     }
 
     internal WebSocketContext Contextualize(WebSocket ws) {
-        var codec = new Protocol(protoByte, config);
-        return new WebSocketContext(ws, codec, GetSocketCancellation());
+        var codec = new Protocol(side, config);
+        return new WebSocketContext(ws, codec, GetSocketTiming());
     }
 
     internal WebSocketContext Contextualize(ClientWebSocket ws) {
-        var codec = new Protocol(protoByte, config);
-        return new WebSocketContext(ws, webSocketUri, codec, GetSocketCancellation());
+        var codec = new Protocol(side, config);
+        return new WebSocketContext(ws, webSocketUri, codec, GetSocketTiming());
     }
 
-    private SocketTiming GetSocketCancellation() {
-        return new SocketTiming(config, Link());
+    private SocketTiming GetSocketTiming() {
+        var t = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        return new SocketTiming(config, t);
+    }
+
+    public void Dispose() {
+        cts.Dispose();
     }
 }

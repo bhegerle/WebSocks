@@ -12,13 +12,13 @@ internal enum CodecState {
 }
 
 internal class Protocol {
-    private readonly ProtocolByte protoByte;
+    private readonly Side protoByte;
     private readonly char[] keyChars;
 
     private byte[] init;
     private Codec enc, dec;
 
-    internal Protocol(ProtocolByte protoByte, Config config) {
+    internal Protocol(Side protoByte, Config config) {
         if (string.IsNullOrEmpty(config.Key))
             throw new Exception("key required");
 
@@ -60,7 +60,7 @@ internal class Protocol {
             MakeCipher(thatMsg.InitSalt).VerifyTag(thatMsg.Plaintext, thatMsg.Tag);
 
             var thisMsg = new Message.Init(init);
-            if (protoByte == ProtocolByte.WsListener)
+            if (protoByte == Side.WsListener)
                 (enc, dec) = MakeCiphers(thisMsg, thatMsg);
             else
                 (dec, enc) = MakeCiphers(thatMsg, thisMsg);
