@@ -20,7 +20,7 @@ internal static class Message {
     }
 
     internal sealed class Data {
-        internal const int TagSize = 16;
+        internal const int TagSize = 12;
         internal const int IdSize = sizeof(uint);
         internal const int SuffixSize = TagSize + IdSize;
 

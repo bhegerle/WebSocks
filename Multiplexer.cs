@@ -64,7 +64,7 @@ internal class Multiplexer : IDisposable {
     }
 
     private async Task WebSocketReceive(WebSocketContext wsCtx) {
-        var seg = NewSeg();
+        var seg = NewSeg(false);
 
         while (true) {
             ArraySegment<byte> msg;
@@ -95,7 +95,7 @@ internal class Multiplexer : IDisposable {
     }
 
     private static async Task SocketReceive(SocketContext sock, WebSocketContext wsCtx) {
-        var seg = NewSeg();
+        var seg = NewSeg(true);
 
         await Log.Write($"starting socket {sock.Id}");
 
@@ -136,7 +136,10 @@ internal class Multiplexer : IDisposable {
         return new SocketTiming(ctx.Config, cts.Token);
     }
 
-    private static ArraySegment<byte> NewSeg() {
-        return new byte[1024 * 1024];
+    private static ArraySegment<byte> NewSeg(bool allowExtend) {
+        var seg = new ArraySegment<byte>(new byte[1024 * 1024]);
+        if (allowExtend)
+            seg = seg[..Message.Data.SuffixSize];
+        return seg;
     }
 }
