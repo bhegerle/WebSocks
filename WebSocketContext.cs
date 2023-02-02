@@ -4,7 +4,7 @@ namespace WebStunnel;
 
 internal class WebSocketContext : IDisposable {
     private readonly WebSocket ws;
-    private readonly SemaphoreSlim mutex;
+    private readonly SemaphoreSlim initMutex, recvMutex, sendMutex;
     private readonly Protocol proto;
     private readonly SocketTiming sockTiming;
     private Connector connector;
@@ -15,7 +15,9 @@ internal class WebSocketContext : IDisposable {
 
         proto = ctx.MakeProtocol();
 
-        mutex = new SemaphoreSlim(1);
+        initMutex = new SemaphoreSlim(1);
+        recvMutex = new SemaphoreSlim(1);
+        sendMutex = new SemaphoreSlim(1);
     }
 
     internal WebSocketContext(ClientWebSocket ws, ServerContext ctx, SocketTiming sockTiming)
@@ -27,31 +29,48 @@ internal class WebSocketContext : IDisposable {
         using var sendTimeout = sockTiming.IdleTimeout();
         await Check(sendTimeout.Token);
 
+        await sendMutex.WaitAsync(sendTimeout.Token);
         try {
             seg = proto.AuthMessage(seg, id.Value);
             await WsSend(seg, sendTimeout.Token);
-            await Log.Trace($"ws\tsend {seg.Count} (w/suffix)");
         } catch (Exception e) {
             await Log.Warn("websocket send exception", e);
             await Cancel();
             throw;
+        } finally {
+            sendMutex.Release();
         }
+
+        await Log.Trace($"ws\tsend {seg.Count} (w/suffix)");
     }
 
     internal async Task<(ArraySegment<byte>, SocketId)> Receive(ArraySegment<byte> seg) {
         using var recvTimeout = sockTiming.IdleTimeout();
         await Check(recvTimeout.Token);
 
+        ArraySegment<byte> payload;
+        uint id;
+
+        await recvMutex.WaitAsync(recvTimeout.Token);
         try {
             seg = await WsRecv(seg, recvTimeout.Token);
-            await Log.Trace($"ws\trecv {seg.Count} (w/suffix)");
-            var (payload, id) = proto.VerifyMessage(seg);
-            return (payload, new SocketId(id));
+            (payload, id) = proto.VerifyMessage(seg);
         } catch (Exception e) {
             await Log.Warn("websocket receive exception", e);
             await Cancel();
             throw;
+        } finally {
+            recvMutex.Release();
         }
+
+        await Log.Trace($"ws\trecv {seg.Count} (w/suffix)");
+        return (payload, new SocketId(id));
+    }
+
+    public void Dispose() {
+        ws.Dispose();
+        sockTiming.Dispose();
+        initMutex.Dispose();
     }
 
     private async Task Cancel() {
@@ -59,14 +78,8 @@ internal class WebSocketContext : IDisposable {
         sockTiming.Cancel();
     }
 
-    public void Dispose() {
-        ws.Dispose();
-        sockTiming.Dispose();
-        mutex.Dispose();
-    }
-
     private async Task Check(CancellationToken token) {
-        await mutex.WaitAsync(token);
+        await initMutex.WaitAsync(token);
         try {
             if (proto.State == CodecState.Active)
                 return;
@@ -84,7 +97,7 @@ internal class WebSocketContext : IDisposable {
             await Cancel();
             throw;
         } finally {
-            mutex.Release();
+            initMutex.Release();
         }
     }
 

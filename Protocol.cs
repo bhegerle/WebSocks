@@ -77,11 +77,7 @@ internal class Protocol {
             CheckState(CodecState.Active);
 
             var ext = seg.Extend(Message.Data.SuffixSize);
-
-            var msg = new Message.Data(ext) {
-                Id = id
-            };
-
+            var msg = new Message.Data(ext) { Id = id };
             enc.Encrypt(msg.Text, msg.Tag);
 
             return ext;
@@ -96,9 +92,7 @@ internal class Protocol {
             CheckState(CodecState.Active);
 
             var msg = new Message.Data(seg);
-
             dec.Decrypt(msg.Text, msg.Tag);
-
             return (msg.Payload, msg.Id);
         } catch {
             SetError();
