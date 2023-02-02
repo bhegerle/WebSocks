@@ -14,6 +14,9 @@ internal class Codec {
 
     internal Codec(Span<char> key, ReadOnlySpan<byte> salt) {
         var dkey = Rfc2898DeriveBytes.Pbkdf2(key, salt, iterations, hashAlgo, keyBytes);
+        foreach (var b in dkey)
+            Console.Write($"{b:x2}");
+        Console.WriteLine();
         aes = new AesGcm(dkey);
         nonce = new byte[AesGcm.NonceByteSizes.MaxSize];
     }
