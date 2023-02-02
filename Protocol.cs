@@ -78,8 +78,9 @@ internal class Protocol {
 
             var ext = seg.Extend(Message.Data.SuffixSize);
 
-            var msg = new Message.Data(ext);
-            msg.Id = id;
+            var msg = new Message.Data(ext) {
+                Id = id
+            };
 
             enc.Encrypt(msg.Text, msg.Tag);
 

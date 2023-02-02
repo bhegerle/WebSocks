@@ -60,8 +60,9 @@ internal class WebSocketsServer : IServer {
             var ws = await httpCtx.WebSockets.AcceptWebSocketAsync();
             await Log.Write("accepted WebSocket");
 
-            using var ctx = new Contextualizer(Side.WsListener, config, cts.Token);
-            await Multiplexer.Multiplex(ws, ctx);
+            var ctx = new ServerContext(Side.WsListener, config, cts.Token);
+            using var mux = new Multiplexer(ctx);
+            await mux.Multiplex(ws);
         } else {
             await Log.Warn("not WebSocket");
             httpCtx.Response.StatusCode = StatusCodes.Status400BadRequest;

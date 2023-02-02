@@ -2,5 +2,5 @@
   "ListenUri": "tcp://127.0.0.1:7777/",
   "TunnelUri": "ws://127.0.0.1:8008/",
   "Key": "foo1",
-  "Verbose": false
+  "Verbose": true
 }

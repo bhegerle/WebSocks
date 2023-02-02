@@ -4,18 +4,16 @@ internal sealed class SocketTiming : IDisposable {
     private readonly Config config;
     private readonly CancellationTokenSource cts;
 
-    internal SocketTiming(Config config, CancellationTokenSource cts) {
+    internal SocketTiming(Config config, CancellationToken token) {
         this.config = config;
-        this.cts = cts;
+        cts = CancellationTokenSource.CreateLinkedTokenSource(token);
     }
 
     internal void Cancel() {
         cts.Cancel();
     }
 
-    internal Task LingerDelay() {
-        return Task.Delay(config.LingerDelay, cts.Token);
-    }
+    internal TimeSpan LingerDelay=>config.LingerDelay;
 
     internal CancellationTokenSource ConnectTimeout(CancellationToken token) {
         return Timeout(config.ConnectTimeout, token);

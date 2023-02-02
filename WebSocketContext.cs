@@ -5,29 +5,30 @@ namespace WebStunnel;
 internal class WebSocketContext : IDisposable {
     private readonly WebSocket ws;
     private readonly SemaphoreSlim mutex;
-    private readonly Protocol codec;
-    private readonly SocketTiming cancellation;
+    private readonly Protocol proto;
+    private readonly SocketTiming sockTiming;
     private Connector connector;
 
-    internal WebSocketContext(WebSocket ws, Protocol codec, SocketTiming cancellation) {
+    internal WebSocketContext(WebSocket ws, ServerContext ctx, SocketTiming sockTiming) {
         this.ws = ws;
-        this.codec = codec;
-        this.cancellation = cancellation;
+        this.sockTiming = sockTiming;
+
+        proto = ctx.MakeProtocol();
 
         mutex = new SemaphoreSlim(1);
     }
 
-    internal WebSocketContext(ClientWebSocket ws, Uri connectTo, Protocol codec, SocketTiming cancellation)
-        : this(ws, codec, cancellation) {
-        connector = new Connector(ws, connectTo);
+    internal WebSocketContext(ClientWebSocket ws, ServerContext ctx, SocketTiming sockTiming)
+        : this((WebSocket)ws, ctx, sockTiming) {
+        connector = new Connector(ws, ctx.WebSocketUri);
     }
 
     internal async Task Send(ArraySegment<byte> seg, SocketId id) {
-        using var sendTimeout = cancellation.IdleTimeout();
+        using var sendTimeout = sockTiming.IdleTimeout();
         await Check(sendTimeout.Token);
 
         try {
-            seg = codec.AuthMessage(seg, id.Value);
+            seg = proto.AuthMessage(seg, id.Value);
             await WsSend(seg, sendTimeout.Token);
             await Log.Trace($"ws\tsend {seg.Count} (w/suffix)");
         } catch (Exception e) {
@@ -38,13 +39,13 @@ internal class WebSocketContext : IDisposable {
     }
 
     internal async Task<(ArraySegment<byte>, SocketId)> Receive(ArraySegment<byte> seg) {
-        using var recvTimeout = cancellation.IdleTimeout();
+        using var recvTimeout = sockTiming.IdleTimeout();
         await Check(recvTimeout.Token);
 
         try {
             seg = await WsRecv(seg, recvTimeout.Token);
             await Log.Trace($"ws\trecv {seg.Count} (w/suffix)");
-            var (payload, id) = codec.VerifyMessage(seg);
+            var (payload, id) = proto.VerifyMessage(seg);
             return (payload, new SocketId(id));
         } catch (Exception e) {
             await Log.Warn("websocket receive exception", e);
@@ -55,28 +56,28 @@ internal class WebSocketContext : IDisposable {
 
     private async Task Cancel() {
         await Log.Warn($"websocket cancelled");
-        cancellation.Cancel();
+        sockTiming.Cancel();
     }
 
     public void Dispose() {
         ws.Dispose();
-        cancellation.Dispose();
+        sockTiming.Dispose();
         mutex.Dispose();
     }
 
     private async Task Check(CancellationToken token) {
         await mutex.WaitAsync(token);
         try {
-            if (codec.State == CodecState.Active)
+            if (proto.State == CodecState.Active)
                 return;
 
-            using var conTimeout = cancellation.ConnectTimeout(token);
+            using var conTimeout = sockTiming.ConnectTimeout(token);
             if (connector != null) {
                 await connector.Connect(conTimeout.Token);
                 connector = null;
             }
 
-            if (codec.State == CodecState.Init) {
+            if (proto.State == CodecState.Init) {
                 await HandshakeCheck(conTimeout.Token);
             }
         } catch {
@@ -91,12 +92,12 @@ internal class WebSocketContext : IDisposable {
         try {
             await Log.Write("    init handshake");
 
-            var sendSeg = codec.InitHandshake();
+            var sendSeg = proto.InitHandshake();
             await WsSend(sendSeg, token);
 
             var seg = new byte[Protocol.InitMessageSize];
             var recvSeg = await WsRecv(seg, token);
-            codec.VerifyHandshake(recvSeg);
+            proto.VerifyHandshake(recvSeg);
 
             await Log.Write("    completed handshake");
         } catch (Exception ex) {

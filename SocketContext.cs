@@ -70,7 +70,11 @@ internal sealed class SocketContext : IDisposable {
     }
 
     internal async Task Linger() {
-        await sockTime.LingerDelay();
+        await Task.Delay(sockTime.LingerDelay);
+    }
+
+    public override string ToString() {
+        return $"{Id} connected to {sock.RemoteEndPoint}";
     }
 
     private async Task Cancel() {

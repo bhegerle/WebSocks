@@ -1,42 +1,69 @@
-﻿using System.Net.WebSockets;
+﻿using System.Net.Sockets;
+using System.Net.WebSockets;
 
 namespace WebStunnel;
 
-internal static class Multiplexer {
-    // problem that WebSocket contextualized here, and not lower in loop
-    internal static async Task Multiplex(WebSocket ws, Contextualizer ctx) {
-        using var sockMap = new SocketMap();
-        await Multiplex(sockMap, ctx, subCtx => subCtx.Contextualize(ws));
+internal class Multiplexer : IDisposable {
+    private readonly CancellationTokenSource cts;
+    private readonly ServerContext ctx;
+
+    internal Multiplexer(ServerContext ctx) {
+        this.ctx = ctx;
+        cts = ctx.Link();
+        SocketMap = new SocketMap();
     }
 
-    internal static async Task Multiplex(IEnumerable<ClientWebSocket> wsSeq, SocketMap sockMap, Contextualizer ctx) {
-        try {
-            await foreach (var ws in ctx.ApplyRateLimit(wsSeq)) {
-                await Multiplex(sockMap, ctx, subCtx => subCtx.Contextualize(ws));
-            }
-        } finally {
-            await Log.Trace("exiting multiplex loop");
-        }
+    private CancellationToken Token => cts.Token;
+
+    internal SocketMap SocketMap { get; }
+
+    internal async Task Multiplex(WebSocket ws) {
+        var wsCtx = new WebSocketContext(ws, ctx, GetSocketTiming());
+        await Multiplex(wsCtx);
     }
 
-    private static async Task Multiplex(SocketMap sockMap, Contextualizer ctx, Func<Contextualizer, WebSocketContext> cons) {
-        using var c = new CancellationTokenSource();
-        using var subCtx = ctx.Subcontext(c.Token);
+    internal async Task Multiplex(ClientWebSocket ws) {
+        var wsCtx = new WebSocketContext(ws, ctx, GetSocketTiming());
+        await Multiplex(wsCtx);
+    }
 
-        using var wsCtx = cons(subCtx);
+    internal async Task Multiplex(Socket s) {
+        var id = new SocketId();
+        var sctx = new SocketContext(s, id, null, GetSocketTiming());
+        await Multiplex(sctx);
+    }
 
-        var recvAll = sockMap.Apply(s => SocketReceive(s, wsCtx), subCtx.Token);
+    private async Task<SocketContext> Multiplex(SocketId id) {
+        var s = new Socket(SocketType.Stream, ProtocolType.Tcp);
+        var sctx = new SocketContext(s, id, ctx.SocketEndPoint, GetSocketTiming());
+        await Multiplex(sctx);
+        return sctx;
+    }
+
+    private async Task Multiplex(SocketContext s) {
+        await Log.Write($"multiplexing {s}");
+        await SocketMap.Add(s);
+    }
+
+    private async Task Multiplex(WebSocketContext wsCtx) {
+        var recvAll = SocketMap.Apply(s => SocketReceive(s, wsCtx), Token);
 
         try {
-            await WebSocketReceive(wsCtx, sockMap, subCtx);
+            await WebSocketReceive(wsCtx);
         } finally {
-            c.Cancel();
+            await Log.Trace("cancelling socket recv");
+            cts.Cancel();
             await recvAll;
             await Log.Trace("exiting ws recv");
         }
     }
 
-    private static async Task WebSocketReceive(WebSocketContext wsCtx, SocketMap sockMap, Contextualizer ctx) {
+    public void Dispose() {
+        cts.Dispose();
+        SocketMap.Dispose();
+    }
+
+    private async Task WebSocketReceive(WebSocketContext wsCtx) {
         var seg = NewSeg();
 
         while (true) {
@@ -50,12 +77,10 @@ internal static class Multiplexer {
                 break;
             }
 
-            var sock = await sockMap.TryGet(id);
+            var sock = await SocketMap.TryGet(id);
             try {
-                if (sock == null) {
-                    sock = ctx.Contextualize(id);
-                    await sockMap.Add(sock);
-                }
+                if (sock == null)
+                    sock = await Multiplex(id);
             } catch (Exception e) {
                 await Log.Warn($"could not get socket {id}", e);
                 continue;
@@ -79,21 +104,36 @@ internal static class Multiplexer {
 
             try {
                 msg = await sock.Receive(seg);
+            } catch (OperationCanceledException) {
+                break;
             } catch (Exception e) {
                 await Log.Warn("exception while receiving from socket", e);
                 msg = seg[..0];
             }
 
-            await wsCtx.Send(msg, sock.Id);
+            try {
+                await wsCtx.Send(msg, sock.Id);
+            } catch (OperationCanceledException) {
+                break;
+            } catch (Exception e) {
+                await Log.Warn("exception while sending to WebSocket", e);
+                break;
+            }
 
             if (msg.Count == 0) {
-                await Log.Write($"exiting socket {sock.Id} receive loop");
+                await Log.Trace($"exiting socket {sock.Id} receive loop");
                 break;
             }
         }
 
-        await Log.Trace($"{sock.Id}\t{sock.Id} lingering");
+        await Log.Trace($"{sock.Id}\tlingering");
         await sock.Linger();
+
+        sock.Dispose();
+    }
+
+    private SocketTiming GetSocketTiming() {
+        return new SocketTiming(ctx.Config, cts.Token);
     }
 
     private static ArraySegment<byte> NewSeg() {
