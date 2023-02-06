@@ -69,7 +69,6 @@ internal class Multiplexer : IDisposable {
         while (true) {
             ArraySegment<byte> msg;
             SocketId id;
-
             try {
                 (msg, id) = await wsCtx.Receive(seg);
             } catch (Exception e) {
@@ -77,10 +76,9 @@ internal class Multiplexer : IDisposable {
                 break;
             }
 
-            var sock = await SocketMap.TryGet(id);
+            SocketContext sock;
             try {
-                if (sock == null)
-                    sock = await Multiplex(id);
+                sock = await SocketMap.TryGet(id) ?? await Multiplex(id);
             } catch (Exception e) {
                 await Log.Warn($"could not get socket {id}", e);
                 continue;
