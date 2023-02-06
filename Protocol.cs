@@ -1,6 +1,4 @@
 ﻿using System.Security.Cryptography;
-using System.Text;
-using static System.Security.Cryptography.HMACSHA512;
 
 namespace WebStunnel;
 
@@ -11,7 +9,7 @@ internal enum CodecState {
     Error
 }
 
-internal class Protocol {
+internal sealed class Protocol {
     private readonly Side protoByte;
     private readonly char[] keyChars;
 

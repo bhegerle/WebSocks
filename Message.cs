@@ -38,7 +38,7 @@ internal static class Message {
 
         internal uint Id {
             get => BitConverter.ToUInt32(idSeg);
-            set => BitConverter.TryWriteBytes(idSeg, value);
+            init => BitConverter.TryWriteBytes(idSeg, value);
         }
     }
 

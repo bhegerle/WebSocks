@@ -25,26 +25,26 @@ internal class WebSocketContext : IDisposable {
         connector = new Connector(ws, ctx.WebSocketUri);
     }
 
-    internal async Task Send(ArraySegment<byte> seg, SocketId id) {
+    internal async Task Send(SocketSegment seg) {
         using var sendTimeout = sockTiming.IdleTimeout();
         await Check(sendTimeout.Token);
 
         await sendMutex.WaitAsync(sendTimeout.Token);
         try {
-            seg = proto.AuthMessage(seg, id.Value);
-            await WsSend(seg, sendTimeout.Token);
+            var a = proto.AuthMessage(seg.Seg, seg.Id.Value);
+            await WsSend(a, sendTimeout.Token);
         } catch (Exception e) {
-            await Log.Warn("websocket send exception", e);
+            await Log.Warn("ws\tsend exception", e);
             await Cancel();
             throw;
         } finally {
             sendMutex.Release();
         }
 
-        await Log.Trace($"ws\tsend {seg.Count} (w/suffix)");
+        await Log.Trace($"ws\tsend {seg.Count}");
     }
 
-    internal async Task<(ArraySegment<byte>, SocketId)> Receive(ArraySegment<byte> seg) {
+    internal async Task<SocketSegment> Receive() {
         using var recvTimeout = sockTiming.IdleTimeout();
         await Check(recvTimeout.Token);
 
@@ -53,18 +53,19 @@ internal class WebSocketContext : IDisposable {
 
         await recvMutex.WaitAsync(recvTimeout.Token);
         try {
-            seg = await WsRecv(seg, recvTimeout.Token);
-            (payload, id) = proto.VerifyMessage(seg);
+            var b = Buffers.New();
+            b = await WsRecv(b, recvTimeout.Token);
+            (payload, id) = proto.VerifyMessage(b);
         } catch (Exception e) {
-            await Log.Warn("websocket receive exception", e);
+            await Log.Warn("ws\trecv exception", e);
             await Cancel();
             throw;
         } finally {
             recvMutex.Release();
         }
 
-        await Log.Trace($"ws\trecv {seg.Count} (w/suffix)");
-        return (payload, new SocketId(id));
+        await Log.Trace($"ws\trecv {payload.Count}");
+        return new SocketSegment(new SocketId(id), payload);
     }
 
     public void Dispose() {

@@ -2,7 +2,7 @@
 
 namespace WebStunnel;
 
-internal class Codec {
+internal sealed class Codec {
     private const int keyBytes = 32;
     private const int iterations = 100_000;
     private static readonly HashAlgorithmName hashAlgo = HashAlgorithmName.SHA512;

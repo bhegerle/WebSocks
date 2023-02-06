@@ -1,8 +1,6 @@
-﻿using System.Net.Sockets;
+﻿namespace WebStunnel;
 
-namespace WebStunnel;
-
-internal class WebSocketsServer : IServer {
+internal sealed class WebSocketsServer : IServer {
     private readonly CancellationTokenSource cts;
     private readonly WebApplication app;
     private readonly Config config;

@@ -1,7 +1,8 @@
 ﻿using System.Net;
+
 namespace WebStunnel;
 
-internal class ServerContext {
+internal sealed class ServerContext {
     private readonly Side side;
     private readonly IPEndPoint sockEp;
     private readonly Uri wsUri;

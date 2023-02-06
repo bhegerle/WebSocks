@@ -1,11 +1,9 @@
-﻿using System.Formats.Asn1;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using System.Net.WebSockets;
-using System.Runtime.CompilerServices;
 
 namespace WebStunnel;
 
-internal class Multiplexer : IDisposable {
+internal sealed class Multiplexer : IDisposable {
     private readonly CancellationTokenSource cts;
     private readonly ServerContext ctx;
     private readonly SocketMap sockMap;
@@ -71,7 +69,7 @@ internal class Multiplexer : IDisposable {
     private async Task WebSocketSend(WebSocketContext wsCtx) {
         await foreach (var s in wsSendQueue.Consume(Token)) {
             try {
-                await wsCtx.Send(s.Seg, s.Id);
+                await wsCtx.Send(s);
             } catch (OperationCanceledException) {
                 break;
             } catch (Exception e) {
@@ -82,13 +80,10 @@ internal class Multiplexer : IDisposable {
     }
 
     private async Task WebSocketReceive(WebSocketContext wsCtx) {
-        var seg = NewSeg(false);
-
         while (true) {
-            ArraySegment<byte> msg;
-            SocketId id;
+            SocketSegment seg;
             try {
-                (msg, id) = await wsCtx.Receive(seg);
+                seg = await wsCtx.Receive();
             } catch (Exception e) {
                 await Log.Warn("exception while receiving from WebSocket", e);
                 break;
@@ -96,58 +91,22 @@ internal class Multiplexer : IDisposable {
 
             SocketContext sock;
             try {
-                sock = await sockMap.TryGet(id) ?? await Multiplex(id);
+                sock = await sockMap.TryGet(seg.Id) ?? await Multiplex(seg.Id);
             } catch (Exception e) {
-                await Log.Warn($"could not get socket {id}", e);
+                await Log.Warn($"could not get socket {seg.Id}", e);
                 continue;
             }
 
             try {
-                await sock.Send2(msg);
+                await sock.Send(seg.Seg);
             } catch (Exception e) {
-                await Log.Warn($"could not send to socket {id}", e);
+                await Log.Warn($"could not send to socket {seg.Id}", e);
             }
         }
     }
 
     private async Task SocketReceive(SocketContext sock) {
         await sock.SendAndReceive(wsSendQueue);
-    }
-
-    private static async Task SocketReceive(SocketContext sock, WebSocketContext wsCtx) {
-        //var seg = NewSeg(true);
-
-        //await Log.Write($"starting socket {sock.Id}");
-
-        //while (true) {
-        //    ArraySegment<byte> msg;
-
-        //    try {
-        //        msg = await sock.Receive(seg);
-        //    } catch (OperationCanceledException) {
-        //        break;
-        //    } catch (Exception e) {
-        //        await Log.Warn("exception while receiving from socket", e);
-        //        msg = seg[..0];
-        //    }
-
-        //    try {
-        //        await wsCtx.Send(msg, sock.Id);
-        //    } catch (OperationCanceledException) {
-        //        break;
-        //    } catch (Exception e) {
-        //        await Log.Warn("exception while sending to WebSocket", e);
-        //        break;
-        //    }
-
-        //    if (msg.Count == 0) {
-        //        await Log.Trace($"exiting socket {sock.Id} receive loop");
-        //        break;
-        //    }
-        //}
-
-        //await Log.Trace($"{sock.Id}\tlingering");
-        //await sock.Linger();
     }
 
     private SocketTiming GetSocketTiming() {

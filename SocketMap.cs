@@ -40,18 +40,13 @@ internal sealed class SocketMap : IDisposable {
         try {
             await foreach (var sock in queue.Consume(token))
                 taskMap[sock.Id] = WrapReceiver(sock);
-        } catch (OperationCanceledException) {
-            if (token.IsCancellationRequested)
-                await Task.WhenAll(taskMap.Values);
+        } finally {
+            await Task.WhenAll(taskMap.Values);
         }
 
         async Task WrapReceiver(SocketContext sock) {
             try {
-                var rcv = receiver(sock);
-                await rcv.WaitAsync(token);
-            } catch (Exception e) {
-                if (!token.IsCancellationRequested)
-                    await Log.Warn("exception receiving from socket", e);
+                await receiver(sock);
             } finally {
                 await Remove(sock);
             }
