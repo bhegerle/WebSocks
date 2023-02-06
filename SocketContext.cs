@@ -91,6 +91,7 @@ internal sealed class SocketContext : IDisposable {
 
             await sockTime.LingerDelay();
         } catch (OperationCanceledException) {
+            await Cancel();
             throw;
         } catch (Exception e) {
             await Log.Warn($"{Id}\tsend exception", e);
@@ -116,6 +117,7 @@ internal sealed class SocketContext : IDisposable {
                     break;
             }
         } catch (OperationCanceledException) {
+            await Cancel();
             throw;
         } catch (Exception e) {
             await Log.Warn($"{Id}\trecv exception", e);
