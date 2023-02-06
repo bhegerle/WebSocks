@@ -81,6 +81,8 @@ internal sealed class SocketContext : IDisposable {
                 using var sendTimeout = sockTime.SendTimeout();
                 await sock.SendAsync(seg, SocketFlags.None, sendTimeout.Token);
                 await Log.Trace($"{Id}\tsend {seg.Count}");
+
+                Buffers.Return(seg);
             }
 
             using var disTimeout = sockTime.ConnectTimeout();

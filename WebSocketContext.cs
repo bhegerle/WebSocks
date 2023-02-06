@@ -33,6 +33,7 @@ internal class WebSocketContext : IDisposable {
         try {
             var a = proto.AuthMessage(seg.Seg, seg.Id.Value);
             await WsSend(a, sendTimeout.Token);
+            Buffers.Return(a);
         } catch (Exception e) {
             await Log.Warn("ws\tsend exception", e);
             await Cancel();

@@ -48,7 +48,7 @@ internal sealed class Multiplexer : IDisposable {
 
     private async Task Multiplex(WebSocketContext wsCtx) {
         var wsSend = WebSocketSend(wsCtx);
-        var allSockRecv = sockMap.Apply(SocketReceive, Token);
+        var allSockRecv = sockMap.Apply(s => s.SendAndReceive(wsSendQueue), Token);
 
         try {
             await WebSocketReceive(wsCtx);
@@ -105,18 +105,7 @@ internal sealed class Multiplexer : IDisposable {
         }
     }
 
-    private async Task SocketReceive(SocketContext sock) {
-        await sock.SendAndReceive(wsSendQueue);
-    }
-
     private SocketTiming GetSocketTiming() {
         return new SocketTiming(ctx.Config, cts.Token);
-    }
-
-    private static ArraySegment<byte> NewSeg(bool allowExtend) {
-        var seg = new ArraySegment<byte>(new byte[1024 * 1024]);
-        if (allowExtend)
-            seg = seg[..Message.Data.SuffixSize];
-        return seg;
     }
 }
