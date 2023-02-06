@@ -71,5 +71,7 @@ internal sealed class SocketMap : IDisposable {
         } finally {
             mutex.Release();
         }
+
+        sock.Dispose();
     }
 }

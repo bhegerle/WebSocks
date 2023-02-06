@@ -1,21 +1,24 @@
-﻿using System.Net.Sockets;
+﻿using System.Formats.Asn1;
+using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Runtime.CompilerServices;
 
 namespace WebStunnel;
 
 internal class Multiplexer : IDisposable {
     private readonly CancellationTokenSource cts;
     private readonly ServerContext ctx;
+    private readonly SocketMap sockMap;
+    private readonly AsyncQueue<SocketSegment> wsSendQueue;
 
     internal Multiplexer(ServerContext ctx) {
         this.ctx = ctx;
         cts = ctx.Link();
-        SocketMap = new SocketMap();
+        sockMap = new SocketMap();
+        wsSendQueue = new AsyncQueue<SocketSegment>();
     }
 
     private CancellationToken Token => cts.Token;
-
-    internal SocketMap SocketMap { get; }
 
     internal async Task Multiplex(WebSocket ws) {
         var wsCtx = new WebSocketContext(ws, ctx, GetSocketTiming());
@@ -42,25 +45,40 @@ internal class Multiplexer : IDisposable {
 
     private async Task Multiplex(SocketContext s) {
         await Log.Write($"multiplexing {s}");
-        await SocketMap.Add(s);
+        await sockMap.Add(s);
     }
 
     private async Task Multiplex(WebSocketContext wsCtx) {
-        var recvAll = SocketMap.Apply(s => SocketReceive(s, wsCtx), Token);
+        var wsSend = WebSocketSend(wsCtx);
+        var allSockRecv = sockMap.Apply(SocketReceive, Token);
 
         try {
             await WebSocketReceive(wsCtx);
         } finally {
             await Log.Trace("cancelling socket recv");
             cts.Cancel();
-            await recvAll;
+            await Task.WhenAll(wsSend, allSockRecv);
             await Log.Trace("exiting ws recv");
         }
     }
 
     public void Dispose() {
         cts.Dispose();
-        SocketMap.Dispose();
+        sockMap.Dispose();
+        wsSendQueue.Dispose();
+    }
+
+    private async Task WebSocketSend(WebSocketContext wsCtx) {
+        await foreach (var s in wsSendQueue.Consume(Token)) {
+            try {
+                await wsCtx.Send(s.Seg, s.Id);
+            } catch (OperationCanceledException) {
+                break;
+            } catch (Exception e) {
+                await Log.Warn("exception while sending to WebSocket", e);
+                break;
+            }
+        }
     }
 
     private async Task WebSocketReceive(WebSocketContext wsCtx) {
@@ -78,56 +96,58 @@ internal class Multiplexer : IDisposable {
 
             SocketContext sock;
             try {
-                sock = await SocketMap.TryGet(id) ?? await Multiplex(id);
+                sock = await sockMap.TryGet(id) ?? await Multiplex(id);
             } catch (Exception e) {
                 await Log.Warn($"could not get socket {id}", e);
                 continue;
             }
 
             try {
-                await sock.Send(msg);
+                await sock.Send2(msg);
             } catch (Exception e) {
                 await Log.Warn($"could not send to socket {id}", e);
             }
         }
     }
 
+    private async Task SocketReceive(SocketContext sock) {
+        await sock.SendAndReceive(wsSendQueue);
+    }
+
     private static async Task SocketReceive(SocketContext sock, WebSocketContext wsCtx) {
-        var seg = NewSeg(true);
+        //var seg = NewSeg(true);
 
-        await Log.Write($"starting socket {sock.Id}");
+        //await Log.Write($"starting socket {sock.Id}");
 
-        while (true) {
-            ArraySegment<byte> msg;
+        //while (true) {
+        //    ArraySegment<byte> msg;
 
-            try {
-                msg = await sock.Receive(seg);
-            } catch (OperationCanceledException) {
-                break;
-            } catch (Exception e) {
-                await Log.Warn("exception while receiving from socket", e);
-                msg = seg[..0];
-            }
+        //    try {
+        //        msg = await sock.Receive(seg);
+        //    } catch (OperationCanceledException) {
+        //        break;
+        //    } catch (Exception e) {
+        //        await Log.Warn("exception while receiving from socket", e);
+        //        msg = seg[..0];
+        //    }
 
-            try {
-                await wsCtx.Send(msg, sock.Id);
-            } catch (OperationCanceledException) {
-                break;
-            } catch (Exception e) {
-                await Log.Warn("exception while sending to WebSocket", e);
-                break;
-            }
+        //    try {
+        //        await wsCtx.Send(msg, sock.Id);
+        //    } catch (OperationCanceledException) {
+        //        break;
+        //    } catch (Exception e) {
+        //        await Log.Warn("exception while sending to WebSocket", e);
+        //        break;
+        //    }
 
-            if (msg.Count == 0) {
-                await Log.Trace($"exiting socket {sock.Id} receive loop");
-                break;
-            }
-        }
+        //    if (msg.Count == 0) {
+        //        await Log.Trace($"exiting socket {sock.Id} receive loop");
+        //        break;
+        //    }
+        //}
 
-        await Log.Trace($"{sock.Id}\tlingering");
-        await sock.Linger();
-
-        sock.Dispose();
+        //await Log.Trace($"{sock.Id}\tlingering");
+        //await sock.Linger();
     }
 
     private SocketTiming GetSocketTiming() {

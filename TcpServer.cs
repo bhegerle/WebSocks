@@ -73,11 +73,11 @@ internal class TcpServer : IServer {
             var wsSeq = WebSocketSequence().RateLimited(config.ReconnectDelay, ctx.Token);
 
             await foreach (var ws in wsSeq) {
-                using var mux = new Multiplexer(ctx);
+                using var wsMux = new Multiplexer(ctx);
 
-                await SetMux(mux);
+                await SetMux(wsMux);
                 try {
-                    await mux.Multiplex(ws);
+                    await wsMux.Multiplex(ws);
                 } finally {
                     await SetMux(null);
                 }

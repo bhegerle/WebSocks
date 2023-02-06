@@ -27,11 +27,6 @@ internal sealed class AsyncQueue<T> : IDisposable {
         while (true) {
             try {
                 await count.WaitAsync(token);
-            } catch (OperationCanceledException) {
-                yield break;
-            }
-
-            try {
                 await mutex.WaitAsync(token);
             } catch (OperationCanceledException) {
                 yield break;
