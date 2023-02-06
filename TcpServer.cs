@@ -69,25 +69,21 @@ internal class TcpServer : IServer {
     }
 
     private async Task Multiplex(ServerContext ctx) {
-        try {
-            var wsSeq = WebSocketSequence().RateLimited(config.ReconnectDelay, ctx.Token);
+        var wsSeq = WebSocketSequence().RateLimited(config.ReconnectDelay, ctx.Token);
 
-            await foreach (var ws in wsSeq) {
-                using var wsMux = new Multiplexer(ctx);
+        await foreach (var ws in wsSeq) {
+            using var wsMux = new Multiplexer(ctx);
 
-                await SetMux(wsMux);
-                try {
-                    await wsMux.Multiplex(ws);
-                } finally {
-                    await SetMux(null);
-                }
+            await SetMux(wsMux);
+            try {
+                await wsMux.Multiplex(ws);
+            } catch (OperationCanceledException) {
+                await Log.Write("cancelled multiplexing");
+            } catch (Exception e) {
+                await Log.Warn("unexpected multiplexing exception", e);
+            } finally {
+                await SetMux(null);
             }
-        } catch (OperationCanceledException) {
-            await Log.Write("cancelled multiplexing");
-            throw;
-        } catch (Exception e) {
-            await Log.Warn("unexpected multiplexing exception", e);
-            throw;
         }
 
         async Task SetMux(Multiplexer m) {
