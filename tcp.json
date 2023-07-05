@@ -1,6 +1,6 @@
 ﻿{
   "ListenUri": "tcp://127.0.0.1:7777/",
-  "TunnelUri": "ws://127.0.0.1:8008/",
+  "TunnelUri": "ws://127.0.0.1:8008/wst",
   "Key": "foo1",
   "Verbose": true
 }
