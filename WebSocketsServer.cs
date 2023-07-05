@@ -54,7 +54,10 @@ internal sealed class WebSocketsServer : IServer {
     private async Task Handler(HttpContext httpCtx, RequestDelegate next) {
         await Log.Write($"request from {httpCtx.GetEndpoint()}");
 
-        if (httpCtx.WebSockets.IsWebSocketRequest) {
+        if (httpCtx.Request.Path != config.ListenUri.AbsolutePath) {
+            await Log.Warn("bad path");
+            httpCtx.Response.StatusCode = StatusCodes.Status404NotFound;
+        } else if (httpCtx.WebSockets.IsWebSocketRequest) {
             var ws = await httpCtx.WebSockets.AcceptWebSocketAsync();
             await Log.Write("accepted WebSocket");
 
